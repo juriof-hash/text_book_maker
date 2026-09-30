@@ -70,11 +70,29 @@ export function isImageSource(code: string): boolean {
 }
 
 /**
+ * Sanitizes TikZ code by mapping non-standard CSS/Tailwind colors to standard LaTeX xcolor names.
+ * Prevents TeX engine crash: "! Package xcolor Error: Undefined color ...".
+ */
+export function sanitizeTikZCode(code: string): string {
+  if (!code) return '';
+  let s = code;
+  // Map Tailwind & CSS color names to standard LaTeX colors
+  s = s.replace(/\b(?:stone|zinc|neutral|slate)-[0-9]+\b/gi, 'black');
+  s = s.replace(/\b(?:gray|grey)-[0-9]+\b/gi, 'gray');
+  s = s.replace(/\bamber(?:-[0-9]+)?\b/gi, 'orange');
+  s = s.replace(/\bemerald(?:-[0-9]+)?\b/gi, 'green!70!black');
+  s = s.replace(/\bindigo(?:-[0-9]+)?\b/gi, 'blue!80!black');
+  s = s.replace(/\brose(?:-[0-9]+)?\b/gi, 'red');
+  s = s.replace(/\bsky(?:-[0-9]+)?\b/gi, 'cyan');
+  return s;
+}
+
+/**
  * Formats and repairs TikZ code: ensures \begin{tikzpicture} and \end{tikzpicture}
- * if raw drawing commands were provided.
+ * if raw drawing commands were provided, and cleans invalid color identifiers.
  */
 export function ensureTikZWrapping(code: string): { code: string; wrapped: boolean } {
-  let clean = code.trim();
+  let clean = sanitizeTikZCode(code.trim());
   if (/\\begin\{tikzpicture\}/i.test(clean)) {
     return { code: clean, wrapped: false };
   }

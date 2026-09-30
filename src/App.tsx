@@ -10,6 +10,7 @@ import { PrintPreviewView } from './components/PrintPreviewView';
 import { ProblemCard } from './components/ProblemCard';
 import { SAMPLE_PROBLEMS } from './data/sampleProblems';
 import { ColumnMapping, LayoutMode, PrintSettings, Problem } from './types';
+import { sanitizeTikZCode } from './utils/illustrationRecognizer';
 import {
   exportProblemsToExcel,
   parseSpreadsheetBuffer
@@ -38,7 +39,13 @@ export default function App() {
       const saved = localStorage.getItem(STORAGE_KEY_PROBLEMS);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map((p: Problem) => ({
+            ...p,
+            illustrationCode:
+              p.illustrationType === 'tikz' ? sanitizeTikZCode(p.illustrationCode) : p.illustrationCode
+          }));
+        }
       }
     } catch {
       // Fallback

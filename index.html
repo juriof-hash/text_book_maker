@@ -33,10 +33,10 @@
     <!-- TikZJax fonts & lazy loader with multi-CDN fallback -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@planktimerr/tikzjax@1.0.7/dist/fonts.css">
     <script>
-      window.TikZJaxNoAutostart = true;
+      window.__tikzJaxLoaded = false;
       window.__tikzJaxPromise = null;
       window.ensureTikZJax = function() {
-        if (typeof window.TikZJax === 'function') return Promise.resolve(window.TikZJax);
+        if (window.__tikzJaxLoaded) return Promise.resolve(true);
         if (window.__tikzJaxPromise) return window.__tikzJaxPromise;
 
         var sources = [
@@ -49,8 +49,8 @@
           var index = 0;
           var lastError = null;
           function tryNext() {
-            if (typeof window.TikZJax === 'function') {
-              resolve(window.TikZJax);
+            if (window.__tikzJaxLoaded) {
+              resolve(true);
               return;
             }
             if (index >= sources.length) {
@@ -63,12 +63,8 @@
             script.src = src;
             script.async = true;
             script.onload = function() {
-              if (typeof window.TikZJax === 'function') {
-                resolve(window.TikZJax);
-              } else {
-                lastError = new Error('TikZJax 스크립트 로드 완료 후 함수 초기화 실패');
-                tryNext();
-              }
+              window.__tikzJaxLoaded = true;
+              resolve(true);
             };
             script.onerror = function() {
               lastError = new Error('TikZJax CDN 접속 불가: ' + src);

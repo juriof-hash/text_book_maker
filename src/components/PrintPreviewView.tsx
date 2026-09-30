@@ -51,7 +51,7 @@ export const PrintPreviewView: React.FC<PrintPreviewViewProps> = ({
     }
   }
 
-  // Effect to typeset math and render TikZ diagrams
+  // Effect to typeset math and render diagrams
   useEffect(() => {
     const container = printAreaRef.current;
     if (!container) return;
@@ -60,15 +60,10 @@ export const PrintPreviewView: React.FC<PrintPreviewViewProps> = ({
 
     const runRender = async () => {
       try {
-        // Step 1: Typeset standard math with MathJax
+        // Typeset LaTeX math with MathJax across the print pages
         await typesetMath(container);
-
-        // Step 2: Render dynamic TikZ diagrams
-        await renderTikZInContainer(container, (completed, total) => {
-          setRenderProgress({ completed, total });
-        });
       } catch (err) {
-        console.warn('Print preview rendering notice:', err);
+        console.warn('Print preview math typesetting notice:', err);
       } finally {
         setIsRendering(false);
       }

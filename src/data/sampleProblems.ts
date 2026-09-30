@@ -22,7 +22,7 @@ export const SAMPLE_PROBLEMS: Problem[] = [
   \\coordinate (C) at (330:2.2);
 
   % Draw Triangle
-  \\draw[thick, color=stone-800] (A) -- (B) -- (C) -- cycle;
+  \\draw[thick, color=black] (A) -- (B) -- (C) -- cycle;
   \\node[above, font=\\small] at (A) {$A$};
   \\node[left, font=\\small] at (B) {$B$};
   \\node[right, font=\\small] at (C) {$C$};
@@ -62,7 +62,7 @@ export const SAMPLE_PROBLEMS: Problem[] = [
     plot (\\x, {\\x*\\x*\\x - 3*\\x + 1}) node[right, font=\\footnotesize] {$y=f(x)$};
 
   % Tangent line
-  \\draw[thick, dashed, color=amber!80!black, domain=-0.5:2.5]
+  \\draw[thick, dashed, color=orange!80!black, domain=-0.5:2.5]
     plot (\\x, {3*\\x - 3}) node[above, font=\\footnotesize] {$y=3x-3$};
 
   % Intersection point P(2,3)

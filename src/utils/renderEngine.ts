@@ -87,38 +87,59 @@ export async function renderTikZInContainer(
 ): Promise<void> {
   if (!container) return;
 
+  // 1. Check existing cached SVGs first to avoid unnecessary WebAssembly compilation
   const scripts = Array.from(
     container.querySelectorAll<HTMLScriptElement>('script[type="text/tikz"]')
   );
   if (!scripts.length) return;
 
+  const uncachedScripts: HTMLScriptElement[] = [];
+
+  for (const script of scripts) {
+    const code = script.textContent || '';
+    const cached = getCachedSVG(code);
+    if (cached) {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'tikz-cached-rendered flex justify-center items-center';
+      wrapper.innerHTML = cached;
+      script.replaceWith(wrapper);
+    } else {
+      uncachedScripts.push(script);
+    }
+  }
+
+  if (uncachedScripts.length === 0) {
+    return;
+  }
+
+  // 2. Ensure TikZJax script is loaded
   const win = window as unknown as {
-    ensureTikZJax?: () => Promise<(el?: HTMLElement) => Promise<void>>;
-    TikZJax?: (el?: HTMLElement) => Promise<void>;
+    ensureTikZJax?: () => Promise<boolean>;
   };
 
-  if (!win.ensureTikZJax) {
-    throw new Error('TikZJax 로더를 찾을 수 없습니다.');
+  if (win.ensureTikZJax) {
+    try {
+      await win.ensureTikZJax();
+    } catch (err) {
+      console.warn('TikZJax loader error:', err);
+      return;
+    }
   }
 
-  const tikzFunc = await win.ensureTikZJax();
-  if (typeof tikzFunc !== 'function') {
-    throw new Error('TikZJax 함수를 초기화할 수 없습니다.');
-  }
-
-  const total = scripts.length;
+  // 3. TikZJax uses a DOM MutationObserver to detect and compile uncached scripts.
+  // We monitor the completion events with a timeout guard.
+  const total = uncachedScripts.length;
   let completed = 0;
 
-  await new Promise<void>((resolve, reject) => {
+  await new Promise<void>((resolve) => {
     let finished = false;
     const timeoutTimer = setTimeout(() => {
       if (!finished) {
         finished = true;
         document.removeEventListener('tikzjax-load-finished', handleFinished, true);
-        // Do not reject abruptly; some diagrams might have completed
         resolve();
       }
-    }, 25000);
+    }, 15000);
 
     function handleFinished(e: Event) {
       const target = e.target as Node;
@@ -127,9 +148,13 @@ export async function renderTikZInContainer(
         onProgress?.(completed, total);
 
         // Store generated SVG in cache
-        const parent = (target as HTMLElement).parentElement;
+        const targetElement = target as HTMLElement;
+        const parent = targetElement.parentElement;
         const code = parent?.getAttribute('data-tikz-source');
-        const svg = parent?.querySelector('svg');
+        const svg = targetElement.tagName.toLowerCase() === 'svg'
+          ? (targetElement as unknown as SVGSVGElement)
+          : parent?.querySelector('svg');
+
         if (code && svg) {
           storeCachedSVG(code, svg.outerHTML);
         }
@@ -144,25 +169,5 @@ export async function renderTikZInContainer(
     }
 
     document.addEventListener('tikzjax-load-finished', handleFinished, true);
-
-    Promise.resolve(tikzFunc(container))
-      .then(() => {
-        // Double check remaining scripts
-        const remaining = container.querySelectorAll('script[type="text/tikz"]').length;
-        if (remaining === 0 && !finished) {
-          finished = true;
-          clearTimeout(timeoutTimer);
-          document.removeEventListener('tikzjax-load-finished', handleFinished, true);
-          resolve();
-        }
-      })
-      .catch((err) => {
-        if (!finished) {
-          finished = true;
-          clearTimeout(timeoutTimer);
-          document.removeEventListener('tikzjax-load-finished', handleFinished, true);
-          reject(err);
-        }
-      });
   });
 }
