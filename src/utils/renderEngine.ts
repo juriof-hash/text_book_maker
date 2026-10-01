@@ -1,3 +1,10 @@
+import {
+  prepareTikZWithKorean,
+  restoreKoreanInTikZElement,
+  restoreKoreanInTikZSvgString,
+  TikZReplacement
+} from './tikzKoreanSupport';
+
 /**
  * High-performance rendering engine with SVG caching for TikZ and MathJax.
  */
@@ -104,6 +111,16 @@ export async function renderTikZInContainer(
       wrapper.innerHTML = cached;
       script.replaceWith(wrapper);
     } else {
+      const { code: compilableCode, replacements, hasKorean } = prepareTikZWithKorean(code);
+      if (hasKorean) {
+        script.textContent = compilableCode;
+        script.setAttribute('data-tikz-source', compilableCode);
+        script.setAttribute('data-original-tikz', code);
+        script.setAttribute('data-korean-replacements', JSON.stringify(replacements));
+      } else {
+        script.setAttribute('data-tikz-source', code);
+        script.setAttribute('data-original-tikz', code);
+      }
       uncachedScripts.push(script);
     }
   }
@@ -150,13 +167,34 @@ export async function renderTikZInContainer(
         // Store generated SVG in cache
         const targetElement = target as HTMLElement;
         const parent = targetElement.parentElement;
-        const code = parent?.getAttribute('data-tikz-source');
+        const originalCode =
+          parent?.getAttribute('data-original-tikz') || parent?.getAttribute('data-tikz-source');
+        const compilableCode = parent?.getAttribute('data-tikz-source') || '';
+        const replacementsJson = parent?.getAttribute('data-korean-replacements');
+        let replacements: TikZReplacement[] = [];
+        if (replacementsJson) {
+          try {
+            replacements = JSON.parse(replacementsJson);
+          } catch {
+            // ignore
+          }
+        }
+
         const svg = targetElement.tagName.toLowerCase() === 'svg'
           ? (targetElement as unknown as SVGSVGElement)
           : parent?.querySelector('svg');
 
-        if (code && svg) {
-          storeCachedSVG(code, svg.outerHTML);
+        if (svg) {
+          if (replacements.length > 0) {
+            restoreKoreanInTikZElement(svg, replacements);
+          }
+          let svgHtml = svg.outerHTML;
+          if (replacements.length > 0) {
+            svgHtml = restoreKoreanInTikZSvgString(svgHtml, replacements);
+          }
+
+          if (originalCode) storeCachedSVG(originalCode, svgHtml);
+          if (compilableCode) storeCachedSVG(compilableCode, svgHtml);
         }
 
         if (completed >= total && !finished) {

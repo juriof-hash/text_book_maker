@@ -73,6 +73,42 @@ const PRESET_SNIPPETS = [
 \\end{tikzpicture}`
   },
   {
+    title: '직육면체와 한글 라벨 (TikZ 한글 지원)',
+    type: 'tikz' as IllustrationType,
+    code: `\\begin{tikzpicture}[scale=0.7, baseline=(current bounding box.center)]
+  \\draw[thick] (0,2) -- (2,2) -- (2,4) -- (0,4) -- cycle;
+  \\draw[thick] (2,2) -- (3,3) -- (3,5) -- (2,4);
+  \\draw[thick] (0,4) -- (1,5) -- (3,5);
+  \\draw[thick] (2,0) -- (4,0) -- (4,2) -- (2,2) -- cycle;
+  \\draw[thick] (4,0) -- (5,1) -- (5,3) -- (4,2);
+  \\draw[thick] (5,3) -- (3,3);
+  \\draw[dashed] (0,2) -- (1,3) -- (3,3);
+  \\draw[dashed] (1,3) -- (1,5);
+  \\draw[dashed] (2,0) -- (3,1) -- (5,1);
+  \\draw[dashed] (3,1) -- (3,3);
+  \\fill (0,5) circle (2pt) node[left] {시작점};
+  \\fill (5,0) circle (2pt) node[right] {끝점};
+\\end{tikzpicture}`
+  },
+  {
+    title: '영역 분할과 자음 라벨 (TikZ ㄱ,ㄴ,ㄷ...)',
+    type: 'tikz' as IllustrationType,
+    code: `\\begin{tikzpicture}[scale=0.8, baseline=(current bounding box.center)]
+  \\draw[thick] (0,0) rectangle (5,3);
+  \\draw[thick] (0,0) -- (4,3);
+  \\draw[thick] (1,0) -- (1,0.75);
+  \\draw[thick] (2,0) -- (2,1.5);
+  \\draw[thick] (3,0) -- (3,2.25);
+  \\draw[thick] (4,0) -- (4,3);
+  \\node at (1.5,2) {ㄱ};
+  \\node at (0.5,0.2) {ㄴ};
+  \\node at (1.5,0.4) {ㄷ};
+  \\node at (2.5,0.6) {ㄹ};
+  \\node at (3.5,0.8) {ㅁ};
+  \\node at (4.5,1.5) {ㅂ};
+\\end{tikzpicture}`
+  },
+  {
     title: '벤 다이어그램 (SVG)',
     type: 'svg' as IllustrationType,
     code: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 160" width="260" height="150">

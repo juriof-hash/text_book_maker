@@ -3,6 +3,11 @@ import { ImageOff } from 'lucide-react';
 import { IllustrationType } from '../types';
 import { sanitizeTikZCode } from '../utils/illustrationRecognizer';
 import { getCachedSVG, storeCachedSVG } from '../utils/renderEngine';
+import {
+  prepareTikZWithKorean,
+  restoreKoreanInTikZElement,
+  restoreKoreanInTikZSvgString
+} from '../utils/tikzKoreanSupport';
 
 interface IllustrationViewerProps {
   type: IllustrationType;
@@ -60,6 +65,22 @@ export const IllustrationViewer: React.FC<IllustrationViewerProps> = ({
         return;
       }
 
+      // Convert any Korean/Unicode text to safe ASCII tokens for TeX82 compilation
+      const { code: compilableCode, replacements, hasKorean } = prepareTikZWithKorean(sanitized);
+
+      if (hasKorean) {
+        const cachedCompilable = getCachedSVG(compilableCode);
+        if (cachedCompilable) {
+          const restoredHtml = restoreKoreanInTikZSvgString(cachedCompilable, replacements);
+          storeCachedSVG(code, restoredHtml);
+          storeCachedSVG(sanitized, restoredHtml);
+          setCachedHtml(restoredHtml);
+          setError(null);
+          setLoading(false);
+          return;
+        }
+      }
+
       setLoading(true);
       setError(null);
       let isMounted = true;
@@ -82,8 +103,9 @@ export const IllustrationViewer: React.FC<IllustrationViewerProps> = ({
 
           const script = document.createElement('script');
           script.type = 'text/tikz';
-          script.textContent = sanitized;
-          container.setAttribute('data-tikz-source', sanitized);
+          script.textContent = compilableCode;
+          container.setAttribute('data-tikz-source', compilableCode);
+          container.setAttribute('data-original-tikz', code);
 
           const onFinished = (e: Event) => {
             if (!isMounted) return;
@@ -94,9 +116,17 @@ export const IllustrationViewer: React.FC<IllustrationViewerProps> = ({
             }
 
             if (svg) {
-              const svgHtml = svg.outerHTML;
+              if (replacements.length > 0) {
+                restoreKoreanInTikZElement(svg, replacements);
+              }
+              let svgHtml = svg.outerHTML;
+              if (replacements.length > 0) {
+                svgHtml = restoreKoreanInTikZSvgString(svgHtml, replacements);
+              }
+
               storeCachedSVG(sanitized, svgHtml);
               storeCachedSVG(code, svgHtml);
+              storeCachedSVG(compilableCode, svgHtml);
               setCachedHtml(svgHtml);
               setError(null);
             }
@@ -112,8 +142,15 @@ export const IllustrationViewer: React.FC<IllustrationViewerProps> = ({
             container.removeEventListener('tikzjax-load-finished', onFinished);
             const svg = container.querySelector('svg');
             if (svg) {
-              const svgHtml = svg.outerHTML;
+              if (replacements.length > 0) {
+                restoreKoreanInTikZElement(svg, replacements);
+              }
+              let svgHtml = svg.outerHTML;
+              if (replacements.length > 0) {
+                svgHtml = restoreKoreanInTikZSvgString(svgHtml, replacements);
+              }
               storeCachedSVG(sanitized, svgHtml);
+              storeCachedSVG(code, svgHtml);
               setCachedHtml(svgHtml);
               setError(null);
               setLoading(false);
