@@ -98,7 +98,7 @@ export const ControlBar: React.FC<ControlBarProps> = ({
             </div>
           </div>
 
-          {/* Layout mode switcher */}
+          {/* Layout mode switcher (3 modes) */}
           <div className="flex items-center gap-1 bg-stone-200/80 p-0.5 rounded border border-stone-300 shrink-0">
             <button
               type="button"
@@ -108,9 +108,9 @@ export const ControlBar: React.FC<ControlBarProps> = ({
                   ? 'bg-white text-stone-900 shadow-xs font-semibold'
                   : 'text-stone-600 hover:text-stone-900'
               }`}
-              title="1페이지에 1문항 배치 (넓은 풀이 공간)"
+              title="1장에 1문제 배치 (전면 여백 및 풀이 공간)"
             >
-              1문제 1쪽
+              1장 1문제
             </button>
             <button
               type="button"
@@ -120,9 +120,9 @@ export const ControlBar: React.FC<ControlBarProps> = ({
                   ? 'bg-white text-stone-900 shadow-xs font-semibold'
                   : 'text-stone-600 hover:text-stone-900'
               }`}
-              title="1페이지에 2문항 배치 (상·하 분할)"
+              title="1장에 2문제 배치 (상·하 2행 분할)"
             >
-              2문제 1쪽
+              1장 2문제 (상·하 2행)
             </button>
             <button
               type="button"
@@ -132,9 +132,9 @@ export const ControlBar: React.FC<ControlBarProps> = ({
                   ? 'bg-white text-stone-900 shadow-xs font-semibold'
                   : 'text-stone-600 hover:text-stone-900'
               }`}
-              title="수능 및 모의고사 스타일 (2단 세로 분할)"
+              title="1장에 2문제 배치 (좌·우 2열 분할, 1열 1문제)"
             >
-              2단 시험지형
+              1장 2문제 (좌·우 2열)
             </button>
           </div>
         </div>

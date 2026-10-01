@@ -106,14 +106,14 @@ export const PrintLayoutSettingsModal: React.FC<PrintLayoutSettingsModalProps> =
             </div>
           </div>
 
-          {/* Layout Mode */}
+          {/* Layout Mode (3 modes) */}
           <div>
-            <label className="block text-stone-700 font-semibold mb-1.5">조판 레이아웃 형식</label>
+            <label className="block text-stone-700 font-semibold mb-1.5">조판 레이아웃 형식 (3가지 모드)</label>
             <div className="grid grid-cols-3 gap-2">
               {[
-                { id: 'single' as LayoutMode, name: '1문제 1쪽', desc: '넓은 풀이 및 여백' },
-                { id: 'double' as LayoutMode, name: '2문제 1쪽', desc: '상·하 2분할' },
-                { id: 'two-column' as LayoutMode, name: '2단 시험지형', desc: '수능/모의고사 스타일' }
+                { id: 'single' as LayoutMode, name: '1장 1문제', desc: 'A4 전면 (넓은 풀이 공간)' },
+                { id: 'double' as LayoutMode, name: '1장 2문제 (2행)', desc: '상·하 분할 (1행 1문제)' },
+                { id: 'two-column' as LayoutMode, name: '1장 2문제 (2열)', desc: '좌·우 분할 (1열 1문제)' }
               ].map((m) => (
                 <button
                   key={m.id}

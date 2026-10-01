@@ -32,22 +32,19 @@ export const PrintPreviewView: React.FC<PrintPreviewViewProps> = ({
       return a.order - b.order;
     });
 
-  // Group problems into pages based on layoutMode
+  // Group problems into pages based on layoutMode:
+  // 1) 'single': 1장 1문제
+  // 2) 'double': 1장 2문제 (상·하 2행 분할)
+  // 3) 'two-column': 1장 2문제 (좌·우 2열 분할, 1열 1문제)
   const pages: Problem[][] = [];
   if (settings.layoutMode === 'single') {
-    // 1 problem per page
     includedProblems.forEach((p) => {
       pages.push([p]);
     });
-  } else if (settings.layoutMode === 'double') {
-    // 2 problems per page
+  } else {
+    // Both 2-problem modes put exactly 2 problems per page
     for (let i = 0; i < includedProblems.length; i += 2) {
       pages.push(includedProblems.slice(i, i + 2));
-    }
-  } else {
-    // two-column exam layout: 2 to 4 problems per page
-    for (let i = 0; i < includedProblems.length; i += 4) {
-      pages.push(includedProblems.slice(i, i + 4));
     }
   }
 
@@ -244,93 +241,107 @@ export const PrintPreviewView: React.FC<PrintPreviewViewProps> = ({
 
                   {/* Problems Content by Layout Mode */}
                   {settings.layoutMode === 'two-column' ? (
-                    /* 2-Column CSAT / Exam Paper Layout */
-                    <div className="grid grid-cols-2 gap-6 relative min-h-[220mm]">
+                    /* 1장 2문제 (좌·우 2열 분할, 1열 1문제) */
+                    <div className="grid grid-cols-2 gap-8 relative min-h-[220mm] flex-1">
                       {/* Vertical dividing line between left and right columns */}
                       <div className="absolute left-1/2 top-0 bottom-0 w-px bg-stone-300 -translate-x-1/2"></div>
 
-                      {/* Left Column (items 0, 1) */}
-                      <div className="flex flex-col gap-8 pr-3">
-                        {pageProblems.slice(0, 2).map((p) => (
-                          <div key={p.id} className="flex flex-col">
-                            {settings.showUnitHeader && p.unit && (
-                              <div className="text-[9pt] text-amber-800 font-serif-kr font-medium mb-1">
-                                [{p.unit}]
+                      {/* Left Column: Problem 1 of this page */}
+                      <div className="flex flex-col justify-between pr-4 h-full">
+                        {pageProblems[0] ? (
+                          <div className="flex flex-col flex-1 h-full">
+                            {settings.showUnitHeader && pageProblems[0].unit && (
+                              <div className="text-[9.5pt] text-amber-800 font-serif-kr font-medium mb-1">
+                                [{pageProblems[0].unit}]
                               </div>
                             )}
-                            <div className="flex items-baseline gap-2 mb-1.5">
-                              <span className="font-serif-kr font-bold text-[13pt] text-stone-900 shrink-0">
-                                {p.num}.
+                            <div className="flex items-baseline gap-2 mb-2">
+                              <span className="font-serif-kr font-bold text-[14pt] text-stone-900 shrink-0">
+                                {pageProblems[0].num}.
                               </span>
                               <div
                                 className={`font-serif-kr ${getFontSizeClass()} text-stone-900 leading-relaxed break-keep`}
                               >
-                                {p.cleanedText || p.rawText}
+                                {pageProblems[0].cleanedText || pageProblems[0].rawText}
                               </div>
                             </div>
 
                             {/* Illustration */}
-                            {p.illustrationType !== 'none' && p.illustrationCode && (
+                            {pageProblems[0].illustrationType !== 'none' && pageProblems[0].illustrationCode && (
                               <div
-                                className={`my-3 flex ${
-                                  p.illustrationPosition === 'left'
+                                className={`my-4 flex ${
+                                  pageProblems[0].illustrationPosition === 'left'
                                     ? 'justify-start'
-                                    : p.illustrationPosition === 'right'
+                                    : pageProblems[0].illustrationPosition === 'right'
                                     ? 'justify-end'
                                     : 'justify-center'
                                 }`}
                               >
                                 <IllustrationViewer
-                                  type={p.illustrationType}
-                                  code={p.illustrationCode}
-                                  scale={p.illustrationScale || settings.defaultIllustrationScale}
+                                  type={pageProblems[0].illustrationType}
+                                  code={pageProblems[0].illustrationCode}
+                                  scale={pageProblems[0].illustrationScale || settings.defaultIllustrationScale}
                                 />
                               </div>
                             )}
+
+                            {/* Workspace / Note space at bottom (hidden during print) */}
+                            <div className="mt-auto pt-8 border-t border-dotted border-stone-200 text-stone-300 text-[10px] font-serif-kr text-center no-print select-none">
+                              [ 풀이 공간 ]
+                            </div>
                           </div>
-                        ))}
+                        ) : null}
                       </div>
 
-                      {/* Right Column (items 2, 3) */}
-                      <div className="flex flex-col gap-8 pl-3">
-                        {pageProblems.slice(2, 4).map((p) => (
-                          <div key={p.id} className="flex flex-col">
-                            {settings.showUnitHeader && p.unit && (
-                              <div className="text-[9pt] text-amber-800 font-serif-kr font-medium mb-1">
-                                [{p.unit}]
+                      {/* Right Column: Problem 2 of this page */}
+                      <div className="flex flex-col justify-between pl-4 h-full">
+                        {pageProblems[1] ? (
+                          <div className="flex flex-col flex-1 h-full">
+                            {settings.showUnitHeader && pageProblems[1].unit && (
+                              <div className="text-[9.5pt] text-amber-800 font-serif-kr font-medium mb-1">
+                                [{pageProblems[1].unit}]
                               </div>
                             )}
-                            <div className="flex items-baseline gap-2 mb-1.5">
-                              <span className="font-serif-kr font-bold text-[13pt] text-stone-900 shrink-0">
-                                {p.num}.
+                            <div className="flex items-baseline gap-2 mb-2">
+                              <span className="font-serif-kr font-bold text-[14pt] text-stone-900 shrink-0">
+                                {pageProblems[1].num}.
                               </span>
                               <div
                                 className={`font-serif-kr ${getFontSizeClass()} text-stone-900 leading-relaxed break-keep`}
                               >
-                                {p.cleanedText || p.rawText}
+                                {pageProblems[1].cleanedText || pageProblems[1].rawText}
                               </div>
                             </div>
 
                             {/* Illustration */}
-                            {p.illustrationType !== 'none' && p.illustrationCode && (
+                            {pageProblems[1].illustrationType !== 'none' && pageProblems[1].illustrationCode && (
                               <div
-                                className={`my-3 flex ${
-                                  p.illustrationPosition === 'left'
+                                className={`my-4 flex ${
+                                  pageProblems[1].illustrationPosition === 'left'
                                     ? 'justify-start'
-                                    : p.illustrationPosition === 'right'
+                                    : pageProblems[1].illustrationPosition === 'right'
                                     ? 'justify-end'
                                     : 'justify-center'
                                 }`}
                               >
                                 <IllustrationViewer
-                                  type={p.illustrationType}
-                                  code={p.illustrationCode}
-                                  scale={p.illustrationScale || settings.defaultIllustrationScale}
+                                  type={pageProblems[1].illustrationType}
+                                  code={pageProblems[1].illustrationCode}
+                                  scale={pageProblems[1].illustrationScale || settings.defaultIllustrationScale}
                                 />
                               </div>
                             )}
+
+                            {/* Workspace / Note space at bottom (hidden during print) */}
+                            <div className="mt-auto pt-8 border-t border-dotted border-stone-200 text-stone-300 text-[10px] font-serif-kr text-center no-print select-none">
+                              [ 풀이 공간 ]
+                            </div>
                           </div>
-                        ))}
+                        ) : (
+                          <div className="h-full flex items-center justify-center border border-dashed border-stone-200 rounded text-stone-300 text-xs font-serif-kr no-print select-none">
+                            [ 여백 ]
+                          </div>
+                        )}
                       </div>
                     </div>
                   ) : settings.layoutMode === 'double' ? (
@@ -378,6 +389,10 @@ export const PrintPreviewView: React.FC<PrintPreviewViewProps> = ({
                               />
                             </div>
                           )}
+
+                          <div className="mt-auto pt-4 border-t border-dotted border-stone-200 text-stone-300 text-[10px] font-serif-kr text-center no-print select-none">
+                            [ 풀이 공간 ]
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -422,9 +437,9 @@ export const PrintPreviewView: React.FC<PrintPreviewViewProps> = ({
                             </div>
                           )}
 
-                          {/* Ample note & solution workspace area */}
-                          <div className="mt-auto pt-10 border-t border-dotted border-stone-200 text-stone-300 text-xs font-serif-kr">
-                            [ 여백 및 풀이 공간 ]
+                          {/* Ample note & solution workspace area (hidden during print) */}
+                          <div className="mt-auto pt-10 border-t border-dotted border-stone-200 text-stone-300 text-xs font-serif-kr text-center no-print select-none">
+                            [ 풀이 공간 ]
                           </div>
                         </div>
                       ))}
