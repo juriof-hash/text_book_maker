@@ -25,7 +25,7 @@ const DEFAULT_SETTINGS: PrintSettings = {
   schoolOrOrg: '',
   showNameBox: true,
   showUnitHeader: true,
-  layoutMode: 'two-column',
+  layoutMode: 'single',
   fontSize: 'standard',
   pageNumberFormat: 'dash',
   defaultIllustrationScale: 100,
@@ -57,7 +57,7 @@ export default function App() {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_SETTINGS);
       if (saved) {
-        return { ...DEFAULT_SETTINGS, ...JSON.parse(saved) };
+        return { ...DEFAULT_SETTINGS, ...JSON.parse(saved), layoutMode: 'single' };
       }
     } catch {
       // Fallback

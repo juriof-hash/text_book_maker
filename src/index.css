@@ -82,6 +82,8 @@ mjx-container[jax="SVG"][display="true"] {
     max-height: 297mm !important;
     page-break-after: always !important;
     break-after: page !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
     overflow: hidden !important;
     box-sizing: border-box !important;
     background: #ffffff !important;
