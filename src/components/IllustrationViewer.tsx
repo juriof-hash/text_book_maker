@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ImageOff } from 'lucide-react';
 import { IllustrationType } from '../types';
-import { sanitizeTikZCode } from '../utils/illustrationRecognizer';
+import { prepareTikZForRendering } from '../utils/illustrationRecognizer';
 import { getCachedSVG, storeCachedSVG } from '../utils/renderEngine';
 
 interface IllustrationViewerProps {
@@ -50,11 +50,19 @@ export const IllustrationViewer: React.FC<IllustrationViewerProps> = ({
     }
 
     if (type === 'tikz') {
-      const sanitized = sanitizeTikZCode(code);
-      const cached = getCachedSVG(sanitized) || getCachedSVG(code);
+      // 1. Instant Cache Lookup
+      const rawCached = getCachedSVG(code);
+      if (rawCached) {
+        setCachedHtml(rawCached);
+        setError(null);
+        setLoading(false);
+        return;
+      }
 
-      if (cached) {
-        setCachedHtml(cached);
+      const prepared = prepareTikZForRendering(code);
+      const preparedCached = getCachedSVG(prepared.body);
+      if (preparedCached) {
+        setCachedHtml(preparedCached);
         setError(null);
         setLoading(false);
         return;
@@ -63,77 +71,91 @@ export const IllustrationViewer: React.FC<IllustrationViewerProps> = ({
       setLoading(true);
       setError(null);
       let isMounted = true;
+      let timeoutTimer: NodeJS.Timeout | null = null;
+      let observer: MutationObserver | null = null;
 
-      const win = window as unknown as {
-        ensureTikZJax?: () => Promise<boolean>;
+      const container = containerRef.current;
+      if (!container) return;
+
+      container.innerHTML = '';
+
+      const handleSuccess = (svgElement: Element) => {
+        if (!isMounted) return;
+        if (timeoutTimer) clearTimeout(timeoutTimer);
+        if (observer) observer.disconnect();
+        const svgHtml = svgElement.outerHTML;
+        storeCachedSVG(code, svgHtml);
+        storeCachedSVG(prepared.body, svgHtml);
+        setCachedHtml(svgHtml);
+        setError(null);
+        setLoading(false);
       };
 
-      const startRender = async () => {
-        try {
-          if (win.ensureTikZJax) {
-            await win.ensureTikZJax();
-          }
+      const handleFailure = (msg: string) => {
+        if (!isMounted) return;
+        if (timeoutTimer) clearTimeout(timeoutTimer);
+        if (observer) observer.disconnect();
+        setLoading(false);
+        setError(msg);
+      };
 
-          if (!isMounted) return;
-          const container = containerRef.current;
-          if (!container) return;
+      // 2. High-speed MutationObserver: detects SVG the exact millisecond it is produced
+      observer = new MutationObserver(() => {
+        if (!isMounted) return;
+        const svg = container.querySelector('svg');
+        if (svg) {
+          handleSuccess(svg);
+          return;
+        }
+        const failedImg = container.querySelector('img[src*="invalid.site"]');
+        if (failedImg) {
+          handleFailure('TikZ 컴파일 오류 (수식 또는 기하 좌표 구문을 확인하세요)');
+        }
+      });
+      observer.observe(container, { childList: true, subtree: true });
 
-          container.innerHTML = '';
-
-          const script = document.createElement('script');
-          script.type = 'text/tikz';
-          script.textContent = sanitized;
-          container.setAttribute('data-tikz-source', sanitized);
-
-          const onFinished = (e: Event) => {
-            if (!isMounted) return;
-            const target = e.target as HTMLElement;
-            let svg = container.querySelector('svg');
-            if (!svg && target && target.tagName?.toLowerCase() === 'svg') {
-              svg = target as unknown as SVGSVGElement;
-            }
-
-            if (svg) {
-              const svgHtml = svg.outerHTML;
-              storeCachedSVG(sanitized, svgHtml);
-              storeCachedSVG(code, svgHtml);
-              setCachedHtml(svgHtml);
-              setError(null);
-            }
-            setLoading(false);
-          };
-
-          container.addEventListener('tikzjax-load-finished', onFinished, { once: true });
-          container.appendChild(script);
-
-          // Safety timeout if TeX syntax has errors and cannot render
-          setTimeout(() => {
-            if (!isMounted) return;
-            container.removeEventListener('tikzjax-load-finished', onFinished);
-            const svg = container.querySelector('svg');
-            if (svg) {
-              const svgHtml = svg.outerHTML;
-              storeCachedSVG(sanitized, svgHtml);
-              setCachedHtml(svgHtml);
-              setError(null);
-              setLoading(false);
-            } else {
-              setLoading(false);
-              setError('TikZ 삽화 조판 실패 (구문 확인 필요)');
-            }
-          }, 10000);
-        } catch (err) {
-          if (!isMounted) return;
-          console.warn('TikZ render failure notice:', err);
-          setError('TikZ 로더 초기화 실패');
-          setLoading(false);
+      // 3. Bubbling load-finished event listener
+      const onFinished = (e: Event) => {
+        if (!isMounted) return;
+        const target = e.target as HTMLElement;
+        let svg = container.querySelector('svg');
+        if (!svg && target && target.tagName?.toLowerCase() === 'svg') {
+          svg = target as unknown as SVGSVGElement;
+        }
+        if (svg) {
+          handleSuccess(svg);
         }
       };
+      container.addEventListener('tikzjax-load-finished', onFinished, { capture: true });
 
-      startRender();
+      // 4. Create and inject configured script with essential math libraries
+      const script = document.createElement('script');
+      script.type = 'text/tikz';
+      script.textContent = prepared.body;
+      script.setAttribute('data-tikz-libraries', prepared.libraries);
+      if (Object.keys(prepared.packages).length > 0) {
+        script.setAttribute('data-tex-packages', JSON.stringify(prepared.packages));
+      }
+      container.appendChild(script);
+
+      // 5. Safety timeout (5s instead of 10s)
+      timeoutTimer = setTimeout(() => {
+        if (!isMounted) return;
+        if (observer) observer.disconnect();
+        container.removeEventListener('tikzjax-load-finished', onFinished, { capture: true });
+        const svg = container.querySelector('svg');
+        if (svg) {
+          handleSuccess(svg);
+        } else {
+          handleFailure('TikZ 렌더링 시간 초과 (구문 확인 필요)');
+        }
+      }, 5000);
 
       return () => {
         isMounted = false;
+        if (observer) observer.disconnect();
+        if (timeoutTimer) clearTimeout(timeoutTimer);
+        container.removeEventListener('tikzjax-load-finished', onFinished, { capture: true });
       };
     }
   }, [code, type]);

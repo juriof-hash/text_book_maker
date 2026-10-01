@@ -2,6 +2,8 @@
  * High-performance rendering engine with SVG caching for TikZ and MathJax.
  */
 
+import { prepareTikZForRendering } from './illustrationRecognizer';
+
 // In-memory cache for rendered TikZ SVGs
 const svgMemoryCache = new Map<string, string>();
 const LOCAL_STORAGE_CACHE_PREFIX = 'math_sheet_tikz_svg_';
@@ -96,16 +98,33 @@ export async function renderTikZInContainer(
   const uncachedScripts: HTMLScriptElement[] = [];
 
   for (const script of scripts) {
-    const code = script.textContent || '';
-    const cached = getCachedSVG(code);
+    const rawCode = script.textContent || '';
+    const cached = getCachedSVG(rawCode);
     if (cached) {
       const wrapper = document.createElement('div');
       wrapper.className = 'tikz-cached-rendered flex justify-center items-center';
       wrapper.innerHTML = cached;
       script.replaceWith(wrapper);
-    } else {
-      uncachedScripts.push(script);
+      continue;
     }
+
+    const prepared = prepareTikZForRendering(rawCode);
+    const preparedCached = getCachedSVG(prepared.body);
+    if (preparedCached) {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'tikz-cached-rendered flex justify-center items-center';
+      wrapper.innerHTML = preparedCached;
+      script.replaceWith(wrapper);
+      continue;
+    }
+
+    script.textContent = prepared.body;
+    script.setAttribute('data-tikz-source', rawCode);
+    script.setAttribute('data-tikz-libraries', prepared.libraries);
+    if (Object.keys(prepared.packages).length > 0) {
+      script.setAttribute('data-tex-packages', JSON.stringify(prepared.packages));
+    }
+    uncachedScripts.push(script);
   }
 
   if (uncachedScripts.length === 0) {
@@ -126,45 +145,59 @@ export async function renderTikZInContainer(
     }
   }
 
-  // 3. TikZJax uses a DOM MutationObserver to detect and compile uncached scripts.
-  // We monitor the completion events with a timeout guard.
+  // 3. TikZJax compiles uncached scripts via Web Worker.
+  // We monitor completion using both MutationObserver and load-finished events.
   const total = uncachedScripts.length;
   let completed = 0;
 
   await new Promise<void>((resolve) => {
     let finished = false;
-    const timeoutTimer = setTimeout(() => {
-      if (!finished) {
-        finished = true;
-        document.removeEventListener('tikzjax-load-finished', handleFinished, true);
-        resolve();
-      }
-    }, 15000);
 
-    function handleFinished(e: Event) {
-      const target = e.target as Node;
-      if (container && container.contains(target)) {
+    const cleanup = () => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timeoutTimer);
+      observer.disconnect();
+      document.removeEventListener('tikzjax-load-finished', handleFinished, true);
+      resolve();
+    };
+
+    const timeoutTimer = setTimeout(cleanup, 8000);
+
+    const checkSvg = (el: Element | null) => {
+      if (!el || finished) return;
+      const svg = el.tagName.toLowerCase() === 'svg' ? el : el.querySelector('svg');
+      if (svg) {
         completed++;
         onProgress?.(completed, total);
 
-        // Store generated SVG in cache
-        const targetElement = target as HTMLElement;
-        const parent = targetElement.parentElement;
-        const code = parent?.getAttribute('data-tikz-source');
-        const svg = targetElement.tagName.toLowerCase() === 'svg'
-          ? (targetElement as unknown as SVGSVGElement)
-          : parent?.querySelector('svg');
-
-        if (code && svg) {
+        const parent = svg.parentElement;
+        const code = parent?.getAttribute('data-tikz-source') || '';
+        if (code) {
           storeCachedSVG(code, svg.outerHTML);
         }
 
-        if (completed >= total && !finished) {
-          finished = true;
-          clearTimeout(timeoutTimer);
-          document.removeEventListener('tikzjax-load-finished', handleFinished, true);
-          resolve();
+        if (completed >= total) {
+          cleanup();
         }
+      }
+    };
+
+    const observer = new MutationObserver((mutations) => {
+      for (const m of mutations) {
+        for (const added of Array.from(m.addedNodes)) {
+          if (added instanceof Element) {
+            checkSvg(added);
+          }
+        }
+      }
+    });
+    observer.observe(container, { childList: true, subtree: true });
+
+    function handleFinished(e: Event) {
+      const target = e.target as HTMLElement;
+      if (container && container.contains(target)) {
+        checkSvg(target);
       }
     }
 
