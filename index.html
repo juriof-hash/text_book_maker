@@ -30,46 +30,11 @@
     </script>
     <script async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-svg.js"></script>
 
-    <!-- Local high-performance TikZJax (instant local loading, 0 network latency, pre-cached WebAssembly) -->
-    <link rel="stylesheet" href="/tikzjax/fonts.css">
-    <script>
-      window.__tikzJaxLoaded = false;
-      window.__tikzJaxPromise = null;
-      window.ensureTikZJax = function() {
-        if (window.__tikzJaxLoaded || window.TikzJax) return Promise.resolve(true);
-        if (window.__tikzJaxPromise) return window.__tikzJaxPromise;
-
-        window.__tikzJaxPromise = new Promise(function(resolve) {
-          // Check if already initialized by script tag
-          if (window.__tikzJaxLoaded || window.TikzJax) {
-            resolve(true);
-            return;
-          }
-
-          var script = document.createElement('script');
-          script.src = '/tikzjax/tikzjax.js';
-          script.async = true;
-          script.onload = function() {
-            window.__tikzJaxLoaded = true;
-            resolve(true);
-          };
-          script.onerror = function() {
-            // Secondary fallback to CDN if local bundle fails
-            var cdn = document.createElement('script');
-            cdn.src = 'https://cdn.jsdelivr.net/npm/@planktimerr/tikzjax@1.0.8/dist/tikzjax.js';
-            cdn.async = true;
-            cdn.onload = function() {
-              window.__tikzJaxLoaded = true;
-              resolve(true);
-            };
-            document.head.appendChild(cdn);
-          };
-          document.head.appendChild(script);
-        });
-        return window.__tikzJaxPromise;
-      };
-    </script>
-    <script async src="/tikzjax/tikzjax.js" onload="window.__tikzJaxLoaded = true;"></script>
+    <!-- TikZJax 라이브러리 및 스타일 (공식 검증 엔진) -->
+    <link rel="stylesheet" href="https://tikzjax.com/v1/fonts.css" />
+    <script src="https://tikzjax.com/v1/tikzjax.js" async></script>
+    <!-- KaTeX 수학 수식 스타일 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
   </head>
   <body class="bg-stone-100 text-stone-900 min-h-screen font-sans antialiased">
     <div id="root"></div>

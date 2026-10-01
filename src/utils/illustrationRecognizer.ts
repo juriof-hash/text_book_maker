@@ -75,7 +75,17 @@ export function isImageSource(code: string): boolean {
  */
 export function sanitizeTikZCode(code: string): string {
   if (!code) return '';
-  let s = code;
+  let s = code.trim();
+
+  // Strip Markdown code fences if present: ```tikz ... ``` or ```latex ... ```
+  s = s.replace(/^```(?:tikz|latex)?\s*\n?([\s\S]*?)\n?```$/i, '$1').trim();
+
+  // Strip \documentclass if user pasted a full standalone document
+  s = s.replace(/\\documentclass(?:\[[^\]]*\])?\{[^}]+\}/gi, '');
+
+  // Replace Unicode degree symbol ° with LaTeX math notation ^{\circ}
+  s = s.replace(/°/g, '^{\\circ}');
+
   // Map Tailwind & CSS color names to standard LaTeX colors
   s = s.replace(/\b(?:stone|zinc|neutral|slate)-[0-9]+\b/gi, 'black');
   s = s.replace(/\b(?:gray|grey)-[0-9]+\b/gi, 'gray');
@@ -84,7 +94,7 @@ export function sanitizeTikZCode(code: string): string {
   s = s.replace(/\bindigo(?:-[0-9]+)?\b/gi, 'blue!80!black');
   s = s.replace(/\brose(?:-[0-9]+)?\b/gi, 'red');
   s = s.replace(/\bsky(?:-[0-9]+)?\b/gi, 'cyan');
-  return s;
+  return s.trim();
 }
 
 /**
