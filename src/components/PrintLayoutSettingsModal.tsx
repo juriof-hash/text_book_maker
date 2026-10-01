@@ -54,7 +54,7 @@ export const PrintLayoutSettingsModal: React.FC<PrintLayoutSettingsModalProps> =
                 type="text"
                 value={settings.bookTitle}
                 onChange={(e) => update('bookTitle', e.target.value)}
-                placeholder="예: 2026학년도 대학수학능력시험 대비 모의평가"
+                placeholder="예: 2027학년도 영재원 대비"
                 className="w-full border border-stone-300 rounded px-2.5 py-1.5 focus:outline-none focus:border-amber-600 bg-white"
               />
             </div>

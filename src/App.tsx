@@ -20,7 +20,7 @@ const STORAGE_KEY_PROBLEMS = 'math_sheet_studio_problems_v2';
 const STORAGE_KEY_SETTINGS = 'math_sheet_studio_settings_v2';
 
 const DEFAULT_SETTINGS: PrintSettings = {
-  bookTitle: '2026학년도 대학수학능력시험 대비 모의평가',
+  bookTitle: '2027학년도 영재원 대비',
   subTitle: '수학 영역',
   schoolOrOrg: '',
   showNameBox: true,
@@ -57,7 +57,12 @@ export default function App() {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_SETTINGS);
       if (saved) {
-        return { ...DEFAULT_SETTINGS, ...JSON.parse(saved), layoutMode: 'single' };
+        const parsed = JSON.parse(saved);
+        const bookTitle =
+          !parsed.bookTitle || parsed.bookTitle === '2026학년도 대학수학능력시험 대비 모의평가'
+            ? '2027학년도 영재원 대비'
+            : parsed.bookTitle;
+        return { ...DEFAULT_SETTINGS, ...parsed, bookTitle, layoutMode: parsed.layoutMode || 'single' };
       }
     } catch {
       // Fallback

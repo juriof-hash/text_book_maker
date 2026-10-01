@@ -212,7 +212,7 @@ export const PrintPreviewView: React.FC<PrintPreviewViewProps> = ({
                             </div>
                           )}
                           <h2 className="font-serif-kr text-[14pt] font-extrabold tracking-tight text-stone-900 leading-tight">
-                            {settings.bookTitle || '모의평가 문제지'}
+                            {settings.bookTitle || '2027학년도 영재원 대비'}
                           </h2>
                         </div>
                         {settings.subTitle && (
