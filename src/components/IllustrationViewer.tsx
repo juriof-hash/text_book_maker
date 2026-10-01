@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ImageOff } from 'lucide-react';
 import { IllustrationType } from '../types';
-import { prepareTikZForRendering } from '../utils/illustrationRecognizer';
-import { getCachedSVG, storeCachedSVG, processTikZScripts } from '../utils/renderEngine';
+import { sanitizeTikZCode } from '../utils/illustrationRecognizer';
+import { getCachedSVG, storeCachedSVG } from '../utils/renderEngine';
 
 interface IllustrationViewerProps {
   type: IllustrationType;
@@ -50,19 +50,11 @@ export const IllustrationViewer: React.FC<IllustrationViewerProps> = ({
     }
 
     if (type === 'tikz') {
-      // 1. Instant Cache Lookup
-      const rawCached = getCachedSVG(code);
-      if (rawCached) {
-        setCachedHtml(rawCached);
-        setError(null);
-        setLoading(false);
-        return;
-      }
+      const sanitized = sanitizeTikZCode(code);
+      const cached = getCachedSVG(sanitized) || getCachedSVG(code);
 
-      const prepared = prepareTikZForRendering(code);
-      const preparedCached = getCachedSVG(prepared.body);
-      if (preparedCached) {
-        setCachedHtml(preparedCached);
+      if (cached) {
+        setCachedHtml(cached);
         setError(null);
         setLoading(false);
         return;
@@ -72,40 +64,73 @@ export const IllustrationViewer: React.FC<IllustrationViewerProps> = ({
       setError(null);
       let isMounted = true;
 
-      const container = containerRef.current;
-      if (!container) return;
+      const win = window as unknown as {
+        ensureTikZJax?: () => Promise<boolean>;
+      };
 
-      container.innerHTML = '';
-
-      // 2. Insert standard TikZ script tag into container
-      const script = document.createElement('script');
-      script.type = 'text/tikz';
-      script.textContent = prepared.body;
-      container.appendChild(script);
-
-      // 3. Trigger official tikzjax.com engine
-      processTikZScripts()
-        .then(() => {
-          if (!isMounted) return;
-          const svg = container.querySelector('svg');
-          if (svg) {
-            const svgHtml = container.innerHTML;
-            storeCachedSVG(code, svgHtml);
-            storeCachedSVG(prepared.body, svgHtml);
-            setCachedHtml(svgHtml);
-            setError(null);
-            setLoading(false);
-          } else {
-            setLoading(false);
-            setError('TikZ 삽화 렌더링 실패 (구문을 확인하세요)');
+      const startRender = async () => {
+        try {
+          if (win.ensureTikZJax) {
+            await win.ensureTikZJax();
           }
-        })
-        .catch((err) => {
+
           if (!isMounted) return;
-          console.warn('TikZJax rendering error:', err);
+          const container = containerRef.current;
+          if (!container) return;
+
+          container.innerHTML = '';
+
+          const script = document.createElement('script');
+          script.type = 'text/tikz';
+          script.textContent = sanitized;
+          container.setAttribute('data-tikz-source', sanitized);
+
+          const onFinished = (e: Event) => {
+            if (!isMounted) return;
+            const target = e.target as HTMLElement;
+            let svg = container.querySelector('svg');
+            if (!svg && target && target.tagName?.toLowerCase() === 'svg') {
+              svg = target as unknown as SVGSVGElement;
+            }
+
+            if (svg) {
+              const svgHtml = svg.outerHTML;
+              storeCachedSVG(sanitized, svgHtml);
+              storeCachedSVG(code, svgHtml);
+              setCachedHtml(svgHtml);
+              setError(null);
+            }
+            setLoading(false);
+          };
+
+          container.addEventListener('tikzjax-load-finished', onFinished, { once: true });
+          container.appendChild(script);
+
+          // Safety timeout if TeX syntax has errors and cannot render
+          setTimeout(() => {
+            if (!isMounted) return;
+            container.removeEventListener('tikzjax-load-finished', onFinished);
+            const svg = container.querySelector('svg');
+            if (svg) {
+              const svgHtml = svg.outerHTML;
+              storeCachedSVG(sanitized, svgHtml);
+              setCachedHtml(svgHtml);
+              setError(null);
+              setLoading(false);
+            } else {
+              setLoading(false);
+              setError('TikZ 삽화 조판 실패 (구문 확인 필요)');
+            }
+          }, 10000);
+        } catch (err) {
+          if (!isMounted) return;
+          console.warn('TikZ render failure notice:', err);
+          setError('TikZ 로더 초기화 실패');
           setLoading(false);
-          setError('TikZ 엔진 초기화 실패');
-        });
+        }
+      };
+
+      startRender();
 
       return () => {
         isMounted = false;

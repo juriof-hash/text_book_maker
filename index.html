@@ -30,11 +30,53 @@
     </script>
     <script async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-svg.js"></script>
 
-    <!-- TikZJax 라이브러리 및 스타일 (공식 검증 엔진) -->
-    <link rel="stylesheet" href="https://tikzjax.com/v1/fonts.css" />
-    <script src="https://tikzjax.com/v1/tikzjax.js" async></script>
-    <!-- KaTeX 수학 수식 스타일 -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+    <!-- TikZJax fonts & lazy loader with multi-CDN fallback -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@planktimerr/tikzjax@1.0.7/dist/fonts.css">
+    <script>
+      window.__tikzJaxLoaded = false;
+      window.__tikzJaxPromise = null;
+      window.ensureTikZJax = function() {
+        if (window.__tikzJaxLoaded) return Promise.resolve(true);
+        if (window.__tikzJaxPromise) return window.__tikzJaxPromise;
+
+        var sources = [
+          'https://cdn.jsdelivr.net/npm/@planktimerr/tikzjax@1.0.7/dist/tikzjax.js',
+          'https://unpkg.com/@planktimerr/tikzjax@1.0.7/dist/tikzjax.js',
+          'https://tikzjax.com/v1/tikzjax.js'
+        ];
+
+        window.__tikzJaxPromise = new Promise(function(resolve, reject) {
+          var index = 0;
+          var lastError = null;
+          function tryNext() {
+            if (window.__tikzJaxLoaded) {
+              resolve(true);
+              return;
+            }
+            if (index >= sources.length) {
+              window.__tikzJaxPromise = null;
+              reject(lastError || new Error('TikZJax 외부 스크립트를 불러올 수 없습니다. 네트워크 환경을 확인하세요.'));
+              return;
+            }
+            var src = sources[index++];
+            var script = document.createElement('script');
+            script.src = src;
+            script.async = true;
+            script.onload = function() {
+              window.__tikzJaxLoaded = true;
+              resolve(true);
+            };
+            script.onerror = function() {
+              lastError = new Error('TikZJax CDN 접속 불가: ' + src);
+              tryNext();
+            };
+            document.head.appendChild(script);
+          }
+          tryNext();
+        });
+        return window.__tikzJaxPromise;
+      };
+    </script>
   </head>
   <body class="bg-stone-100 text-stone-900 min-h-screen font-sans antialiased">
     <div id="root"></div>

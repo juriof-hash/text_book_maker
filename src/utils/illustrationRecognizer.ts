@@ -75,17 +75,7 @@ export function isImageSource(code: string): boolean {
  */
 export function sanitizeTikZCode(code: string): string {
   if (!code) return '';
-  let s = code.trim();
-
-  // Strip Markdown code fences if present: ```tikz ... ``` or ```latex ... ```
-  s = s.replace(/^```(?:tikz|latex)?\s*\n?([\s\S]*?)\n?```$/i, '$1').trim();
-
-  // Strip \documentclass if user pasted a full standalone document
-  s = s.replace(/\\documentclass(?:\[[^\]]*\])?\{[^}]+\}/gi, '');
-
-  // Replace Unicode degree symbol ° with LaTeX math notation ^{\circ}
-  s = s.replace(/°/g, '^{\\circ}');
-
+  let s = code;
   // Map Tailwind & CSS color names to standard LaTeX colors
   s = s.replace(/\b(?:stone|zinc|neutral|slate)-[0-9]+\b/gi, 'black');
   s = s.replace(/\b(?:gray|grey)-[0-9]+\b/gi, 'gray');
@@ -94,7 +84,7 @@ export function sanitizeTikZCode(code: string): string {
   s = s.replace(/\bindigo(?:-[0-9]+)?\b/gi, 'blue!80!black');
   s = s.replace(/\brose(?:-[0-9]+)?\b/gi, 'red');
   s = s.replace(/\bsky(?:-[0-9]+)?\b/gi, 'cyan');
-  return s.trim();
+  return s;
 }
 
 /**
@@ -114,104 +104,6 @@ export function ensureTikZWrapping(code: string): { code: string; wrapped: boole
   }
 
   return { code: clean, wrapped: false };
-}
-
-export interface PreparedTikZ {
-  body: string;
-  libraries: string;
-  packages: Record<string, string>;
-  preamble: string;
-}
-
-/**
- * Prepares user-supplied TikZ code for robust compilation with TikZJax.
- * Automatically injects essential math libraries (calc, arrows.meta, positioning, patterns, etc.),
- * strips harmful conflicting document/preamble tags, sanitizes colors, and fixes unicode symbols.
- */
-export function prepareTikZForRendering(rawCode: string): PreparedTikZ {
-  if (!rawCode) {
-    return {
-      body: '',
-      libraries: 'arrows.meta,calc,positioning,shapes.geometric,patterns,intersections,angles,quotes,decorations.pathmorphing,decorations.markings',
-      packages: { amsmath: '', amssymb: '' },
-      preamble: ''
-    };
-  }
-
-  let code = rawCode.trim();
-
-  // 1. Strip Markdown code fences if present (```tikz ... ```)
-  code = code.replace(/^```(?:tikz|latex)?\s*\n?([\s\S]*?)\n?```$/i, '$1').trim();
-
-  // 2. Default essential libraries for Korean/CSAT math exam geometry and functions
-  const librarySet = new Set<string>([
-    'arrows.meta',
-    'calc',
-    'positioning',
-    'shapes.geometric',
-    'patterns',
-    'intersections',
-    'angles',
-    'quotes',
-    'decorations.pathmorphing',
-    'decorations.markings'
-  ]);
-
-  const packageMap: Record<string, string> = {
-    amsmath: '',
-    amssymb: ''
-  };
-
-  // 3. Extract and strip any \usetikzlibrary{...} from user code to avoid preamble collision
-  code = code.replace(/\\usetikzlibrary\{([^}]+)\}/gi, (_, libs) => {
-    libs.split(',').forEach((l: string) => {
-      const trimmed = l.trim();
-      if (trimmed) librarySet.add(trimmed);
-    });
-    return '';
-  });
-
-  // 4. Extract and strip \usepackage[...]{...} from user code
-  code = code.replace(/\\usepackage(?:\[([^\]]*)\])?\{([^}]+)\}/gi, (_, opt, pkgs) => {
-    pkgs.split(',').forEach((p: string) => {
-      const pkgName = p.trim();
-      if (pkgName && pkgName !== 'tikz' && pkgName !== 'xcolor') {
-        packageMap[pkgName] = (opt || '').trim();
-      }
-    });
-    return '';
-  });
-
-  // 5. Strip \documentclass[...] and its arguments
-  code = code.replace(/\\documentclass(?:\[[^\]]*\])?\{[^}]+\}/gi, '');
-
-  // 6. Strip \begin{document} and \end{document} to prevent fatal nested document error
-  code = code.replace(/\\begin\{document\}/gi, '').replace(/\\end\{document\}/gi, '');
-
-  // 7. Replace Unicode degree symbol ° with LaTeX math notation ^{\circ}
-  code = code.replace(/°/g, '^{\\circ}');
-
-  // 8. Fix common LaTeX syntax escape issues
-  code = code.replace(/\\\\(draw|fill|node|coordinate|path|clip|shade|foreach|matrix|pic|definecolor)\b/g, '\\$1');
-  code = code.replace(/\\\\begin\{/g, '\\begin{').replace(/\\\\end\{/g, '\\end{');
-
-  // 9. Sanitize Tailwind & non-standard CSS colors to standard LaTeX xcolor names
-  code = sanitizeTikZCode(code);
-
-  // 10. Ensure \begin{tikzpicture} wrapper exists if only raw drawing directives were provided
-  code = code.trim();
-  if (!/\\begin\{tikzpicture\}/i.test(code)) {
-    if (/\\(draw|fill|shade|node|path|clip|coordinate)\b/i.test(code)) {
-      code = `\\begin{tikzpicture}[baseline=(current bounding box.center), scale=0.9]\n${code}\n\\end{tikzpicture}`;
-    }
-  }
-
-  return {
-    body: code,
-    libraries: Array.from(librarySet).join(','),
-    packages: packageMap,
-    preamble: ''
-  };
 }
 
 /**

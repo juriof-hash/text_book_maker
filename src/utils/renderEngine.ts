@@ -2,8 +2,6 @@
  * High-performance rendering engine with SVG caching for TikZ and MathJax.
  */
 
-import { prepareTikZForRendering } from './illustrationRecognizer';
-
 // In-memory cache for rendered TikZ SVGs
 const svgMemoryCache = new Map<string, string>();
 const LOCAL_STORAGE_CACHE_PREFIX = 'math_sheet_tikz_svg_';
@@ -79,51 +77,6 @@ export async function typesetMath(container: HTMLElement | null): Promise<void> 
   }
 }
 
-let isProcessingTikZ = false;
-let tikzQueue: Array<() => void> = [];
-
-/**
- * Triggers official TikZJax (tikzjax.com) compilation for all pending <script type="text/tikz"> elements.
- * Chains executions sequentially to guarantee WebAssembly virtual filesystem safety.
- */
-export async function processTikZScripts(): Promise<void> {
-  return new Promise((resolve) => {
-    tikzQueue.push(resolve);
-    runNextTikZBatch();
-  });
-}
-
-async function runNextTikZBatch() {
-  if (isProcessingTikZ || tikzQueue.length === 0) return;
-  isProcessingTikZ = true;
-
-  const currentResolvers = [...tikzQueue];
-  tikzQueue = [];
-
-  try {
-    const win = window as unknown as { onload?: () => Promise<void> };
-
-    // Wait until window.onload is attached by https://tikzjax.com/v1/tikzjax.js
-    let attempts = 0;
-    while (typeof win.onload !== 'function' && attempts < 100) {
-      await new Promise((r) => setTimeout(r, 50));
-      attempts++;
-    }
-
-    if (typeof win.onload === 'function') {
-      await win.onload();
-    }
-  } catch (err) {
-    console.warn('TikZJax batch compilation notice:', err);
-  } finally {
-    isProcessingTikZ = false;
-    currentResolvers.forEach((res) => res());
-    if (tikzQueue.length > 0) {
-      runNextTikZBatch();
-    }
-  }
-}
-
 /**
  * Renders all <script type="text/tikz"> elements inside a container using TikZJax,
  * with caching and per-diagram error boundaries.
@@ -140,50 +93,81 @@ export async function renderTikZInContainer(
   );
   if (!scripts.length) return;
 
-  let uncachedCount = 0;
+  const uncachedScripts: HTMLScriptElement[] = [];
 
   for (const script of scripts) {
-    const rawCode = script.textContent || '';
-    const cached = getCachedSVG(rawCode);
+    const code = script.textContent || '';
+    const cached = getCachedSVG(code);
     if (cached) {
       const wrapper = document.createElement('div');
       wrapper.className = 'tikz-cached-rendered flex justify-center items-center';
       wrapper.innerHTML = cached;
       script.replaceWith(wrapper);
-      continue;
+    } else {
+      uncachedScripts.push(script);
     }
-
-    const prepared = prepareTikZForRendering(rawCode);
-    const preparedCached = getCachedSVG(prepared.body);
-    if (preparedCached) {
-      const wrapper = document.createElement('div');
-      wrapper.className = 'tikz-cached-rendered flex justify-center items-center';
-      wrapper.innerHTML = preparedCached;
-      script.replaceWith(wrapper);
-      continue;
-    }
-
-    script.textContent = prepared.body;
-    script.setAttribute('data-tikz-source', rawCode);
-    uncachedCount++;
   }
 
-  if (uncachedCount === 0) {
+  if (uncachedScripts.length === 0) {
     return;
   }
 
-  // 2. Trigger official TikZJax compilation
-  await processTikZScripts();
+  // 2. Ensure TikZJax script is loaded
+  const win = window as unknown as {
+    ensureTikZJax?: () => Promise<boolean>;
+  };
 
-  // 3. Scan container and cache any newly generated SVGs
-  const svgContainers = Array.from(container.querySelectorAll('div > svg'));
-  for (const svg of svgContainers) {
-    const parent = svg.parentElement;
-    const source = parent?.getAttribute('data-tikz-source');
-    if (source && parent) {
-      storeCachedSVG(source, parent.innerHTML);
+  if (win.ensureTikZJax) {
+    try {
+      await win.ensureTikZJax();
+    } catch (err) {
+      console.warn('TikZJax loader error:', err);
+      return;
     }
   }
 
-  onProgress?.(uncachedCount, uncachedCount);
+  // 3. TikZJax uses a DOM MutationObserver to detect and compile uncached scripts.
+  // We monitor the completion events with a timeout guard.
+  const total = uncachedScripts.length;
+  let completed = 0;
+
+  await new Promise<void>((resolve) => {
+    let finished = false;
+    const timeoutTimer = setTimeout(() => {
+      if (!finished) {
+        finished = true;
+        document.removeEventListener('tikzjax-load-finished', handleFinished, true);
+        resolve();
+      }
+    }, 15000);
+
+    function handleFinished(e: Event) {
+      const target = e.target as Node;
+      if (container && container.contains(target)) {
+        completed++;
+        onProgress?.(completed, total);
+
+        // Store generated SVG in cache
+        const targetElement = target as HTMLElement;
+        const parent = targetElement.parentElement;
+        const code = parent?.getAttribute('data-tikz-source');
+        const svg = targetElement.tagName.toLowerCase() === 'svg'
+          ? (targetElement as unknown as SVGSVGElement)
+          : parent?.querySelector('svg');
+
+        if (code && svg) {
+          storeCachedSVG(code, svg.outerHTML);
+        }
+
+        if (completed >= total && !finished) {
+          finished = true;
+          clearTimeout(timeoutTimer);
+          document.removeEventListener('tikzjax-load-finished', handleFinished, true);
+          resolve();
+        }
+      }
+    }
+
+    document.addEventListener('tikzjax-load-finished', handleFinished, true);
+  });
 }
