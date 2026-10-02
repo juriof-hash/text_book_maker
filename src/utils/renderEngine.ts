@@ -4,6 +4,7 @@ import {
   restoreKoreanInTikZSvgString,
   TikZReplacement
 } from './tikzKoreanSupport';
+import { canParseWithFastEngine, parseTikz } from './tikzParser';
 
 /**
  * High-performance rendering engine with SVG caching for TikZ and MathJax.
@@ -110,19 +111,37 @@ export async function renderTikZInContainer(
       wrapper.className = 'tikz-cached-rendered flex justify-center items-center';
       wrapper.innerHTML = cached;
       script.replaceWith(wrapper);
-    } else {
-      const { code: compilableCode, replacements, hasKorean } = prepareTikZWithKorean(code);
-      if (hasKorean) {
-        script.textContent = compilableCode;
-        script.setAttribute('data-tikz-source', compilableCode);
-        script.setAttribute('data-original-tikz', code);
-        script.setAttribute('data-korean-replacements', JSON.stringify(replacements));
-      } else {
-        script.setAttribute('data-tikz-source', code);
-        script.setAttribute('data-original-tikz', code);
-      }
-      uncachedScripts.push(script);
+      continue;
     }
+
+    // Fast native vector engine: instant zero-latency rendering with 100% Korean support
+    if (canParseWithFastEngine(code)) {
+      try {
+        const parsed = parseTikz(code);
+        if (parsed.svg && !parsed.errors.length) {
+          storeCachedSVG(code, parsed.svg);
+          const wrapper = document.createElement('div');
+          wrapper.className = 'tikz-cached-rendered flex justify-center items-center';
+          wrapper.innerHTML = parsed.svg;
+          script.replaceWith(wrapper);
+          continue;
+        }
+      } catch (err) {
+        console.warn('Fast TikZ engine fallback to TikZJax in container:', err);
+      }
+    }
+
+    const { code: compilableCode, replacements, hasKorean } = prepareTikZWithKorean(code);
+    if (hasKorean) {
+      script.textContent = compilableCode;
+      script.setAttribute('data-tikz-source', compilableCode);
+      script.setAttribute('data-original-tikz', code);
+      script.setAttribute('data-korean-replacements', JSON.stringify(replacements));
+    } else {
+      script.setAttribute('data-tikz-source', code);
+      script.setAttribute('data-original-tikz', code);
+    }
+    uncachedScripts.push(script);
   }
 
   if (uncachedScripts.length === 0) {

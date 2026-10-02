@@ -3,6 +3,7 @@ import { ImageOff } from 'lucide-react';
 import { IllustrationType } from '../types';
 import { sanitizeTikZCode } from '../utils/illustrationRecognizer';
 import { getCachedSVG, storeCachedSVG } from '../utils/renderEngine';
+import { canParseWithFastEngine, parseTikz } from '../utils/tikzParser';
 import {
   prepareTikZWithKorean,
   restoreKoreanInTikZElement,
@@ -65,7 +66,24 @@ export const IllustrationViewer: React.FC<IllustrationViewerProps> = ({
         return;
       }
 
-      // Convert any Korean/Unicode text to safe ASCII tokens for TeX82 compilation
+      // Fast native vector engine: instant zero-latency rendering with 100% Korean support
+      if (canParseWithFastEngine(sanitized)) {
+        try {
+          const parsed = parseTikz(sanitized);
+          if (parsed.svg && !parsed.errors.length) {
+            storeCachedSVG(code, parsed.svg);
+            storeCachedSVG(sanitized, parsed.svg);
+            setCachedHtml(parsed.svg);
+            setError(null);
+            setLoading(false);
+            return;
+          }
+        } catch (err) {
+          console.warn('Fast TikZ engine fallback to TikZJax:', err);
+        }
+      }
+
+      // Fallback: Convert any Korean/Unicode text to safe ASCII tokens for TeX82 compilation
       const { code: compilableCode, replacements, hasKorean } = prepareTikZWithKorean(sanitized);
 
       if (hasKorean) {
