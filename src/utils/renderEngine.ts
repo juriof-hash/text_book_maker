@@ -1,4 +1,5 @@
 import {
+  fixDegreeSymbolsInSvgString,
   prepareTikZWithKorean,
   restoreKoreanInTikZElement,
   restoreKoreanInTikZSvgString,
@@ -31,15 +32,19 @@ export function getCachedSVG(code: string): string | null {
 
   // Check memory cache
   if (svgMemoryCache.has(hash)) {
-    return svgMemoryCache.get(hash)!;
+    const cached = svgMemoryCache.get(hash)!;
+    const fixed = fixDegreeSymbolsInSvgString(cached);
+    if (fixed !== cached) svgMemoryCache.set(hash, fixed);
+    return fixed;
   }
 
   // Check localStorage cache
   try {
     const local = localStorage.getItem(LOCAL_STORAGE_CACHE_PREFIX + hash);
     if (local) {
-      svgMemoryCache.set(hash, local);
-      return local;
+      const fixed = fixDegreeSymbolsInSvgString(local);
+      svgMemoryCache.set(hash, fixed);
+      return fixed;
     }
   } catch {
     // Ignore storage quota errors
@@ -50,11 +55,12 @@ export function getCachedSVG(code: string): string | null {
 
 export function storeCachedSVG(code: string, svg: string): void {
   if (!code || !svg) return;
+  const fixedSvg = fixDegreeSymbolsInSvgString(svg);
   const hash = getCodeHash(code.trim());
-  svgMemoryCache.set(hash, svg);
+  svgMemoryCache.set(hash, fixedSvg);
 
   try {
-    localStorage.setItem(LOCAL_STORAGE_CACHE_PREFIX + hash, svg);
+    localStorage.setItem(LOCAL_STORAGE_CACHE_PREFIX + hash, fixedSvg);
   } catch {
     // Quota reached; memory cache remains active
   }
@@ -204,13 +210,8 @@ export async function renderTikZInContainer(
           : parent?.querySelector('svg');
 
         if (svg) {
-          if (replacements.length > 0) {
-            restoreKoreanInTikZElement(svg, replacements);
-          }
-          let svgHtml = svg.outerHTML;
-          if (replacements.length > 0) {
-            svgHtml = restoreKoreanInTikZSvgString(svgHtml, replacements);
-          }
+          restoreKoreanInTikZElement(svg, replacements);
+          let svgHtml = restoreKoreanInTikZSvgString(svg.outerHTML, replacements);
 
           if (originalCode) storeCachedSVG(originalCode, svgHtml);
           if (compilableCode) storeCachedSVG(compilableCode, svgHtml);

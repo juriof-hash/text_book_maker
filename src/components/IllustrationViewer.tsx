@@ -134,13 +134,8 @@ export const IllustrationViewer: React.FC<IllustrationViewerProps> = ({
             }
 
             if (svg) {
-              if (replacements.length > 0) {
-                restoreKoreanInTikZElement(svg, replacements);
-              }
-              let svgHtml = svg.outerHTML;
-              if (replacements.length > 0) {
-                svgHtml = restoreKoreanInTikZSvgString(svgHtml, replacements);
-              }
+              restoreKoreanInTikZElement(svg, replacements);
+              let svgHtml = restoreKoreanInTikZSvgString(svg.outerHTML, replacements);
 
               storeCachedSVG(sanitized, svgHtml);
               storeCachedSVG(code, svgHtml);
@@ -160,13 +155,8 @@ export const IllustrationViewer: React.FC<IllustrationViewerProps> = ({
             container.removeEventListener('tikzjax-load-finished', onFinished);
             const svg = container.querySelector('svg');
             if (svg) {
-              if (replacements.length > 0) {
-                restoreKoreanInTikZElement(svg, replacements);
-              }
-              let svgHtml = svg.outerHTML;
-              if (replacements.length > 0) {
-                svgHtml = restoreKoreanInTikZSvgString(svgHtml, replacements);
-              }
+              restoreKoreanInTikZElement(svg, replacements);
+              let svgHtml = restoreKoreanInTikZSvgString(svg.outerHTML, replacements);
               storeCachedSVG(sanitized, svgHtml);
               storeCachedSVG(code, svgHtml);
               setCachedHtml(svgHtml);
@@ -176,7 +166,7 @@ export const IllustrationViewer: React.FC<IllustrationViewerProps> = ({
               setLoading(false);
               setError('TikZ 삽화 조판 실패 (구문 확인 필요)');
             }
-          }, 10000);
+          }, 4000);
         } catch (err) {
           if (!isMounted) return;
           console.warn('TikZ render failure notice:', err);

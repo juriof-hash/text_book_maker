@@ -1,7 +1,8 @@
 /**
  * High-performance client-side TikZ to SVG Parser and Generator
  * Directly compiles TikZ code into pure SVG with instant zero-latency rendering,
- * native Korean / Unicode text support, and KaTeX math formulas.
+ * native Korean / Unicode text support, KaTeX math formulas, custom styles,
+ * and advanced color models.
  */
 
 import katex from 'katex';
@@ -66,14 +67,38 @@ const COLOR_MAP: Record<string, string> = {
   none: 'none',
 };
 
-// Parse TikZ color expressions like "blue!30!white", "red!70!black"
+// Parse TikZ color expressions like "rgb,255:red,175;green,218;blue,198", "blue!30!white"
 export function parseTikzColor(raw: string): string {
-  const clean = raw.trim();
+  let clean = raw.trim();
   if (!clean || clean === 'none') return 'none';
   if (COLOR_MAP[clean.toLowerCase()]) return COLOR_MAP[clean.toLowerCase()];
 
   // Check hex code directly
   if (clean.startsWith('#')) return clean;
+
+  // Check xcolor rgb 255 model: e.g. {rgb,255:red,175;green,218;blue,198} or rgb,255:red,175;green,218;blue,198
+  if (clean.startsWith('{') && clean.endsWith('}')) {
+    clean = clean.slice(1, -1).trim();
+  }
+
+  const rgb255Match = clean.match(/rgb\s*,\s*255\s*:\s*red\s*,\s*(\d+)\s*;\s*green\s*,\s*(\d+)\s*;\s*blue\s*,\s*(\d+)/i);
+  if (rgb255Match) {
+    return `rgb(${rgb255Match[1]}, ${rgb255Match[2]}, ${rgb255Match[3]})`;
+  }
+
+  const rgb255SimpleMatch = clean.match(/rgb\s*,\s*255\s*:\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+  if (rgb255SimpleMatch) {
+    return `rgb(${rgb255SimpleMatch[1]}, ${rgb255SimpleMatch[2]}, ${rgb255SimpleMatch[3]})`;
+  }
+
+  // xcolor normalized rgb model: rgb:red,0.5;green,0.8;blue,0.7
+  const rgbNormMatch = clean.match(/rgb\s*:\s*red\s*,\s*([\d.]+)\s*;\s*green\s*,\s*([\d.]+)\s*;\s*blue\s*,\s*([\d.]+)/i);
+  if (rgbNormMatch) {
+    const r = Math.round(parseFloat(rgbNormMatch[1]) * 255);
+    const g = Math.round(parseFloat(rgbNormMatch[2]) * 255);
+    const b = Math.round(parseFloat(rgbNormMatch[3]) * 255);
+    return `rgb(${r}, ${g}, ${b})`;
+  }
 
   // Check color mixing: base!pct!target or base!pct
   const mixMatch = clean.match(/^([a-zA-Z]+)!(\d+)(?:!([a-zA-Z]+))?$/);
@@ -114,17 +139,30 @@ function hexToRgb(hex: string) {
 // Convert LaTeX math formula to HTML string using KaTeX (or fallback)
 export function renderMathText(latex: string): string {
   try {
-    // If text contains $...$, render math portions
-    return latex.replace(/\$([^$]+)\$/g, (_, math) => {
+    let clean = latex.trim();
+    // Wrap naked angle/degree notation in $: e.g. 51° -> $51^\circ$, 51^\circ -> $51^\circ$
+    if (!clean.includes('$')) {
+      if (/\b\d+\s*°/.test(clean)) {
+        clean = clean.replace(/\b(\d+)\s*°/g, '$$$1^\\circ$$');
+      } else if (/\b\d+\s*\^\{?\\circ\}?/.test(clean)) {
+        clean = clean.replace(/\b(\d+)\s*\^\{?\\circ\}?/g, '$$$1^\\circ$$');
+      }
+    }
+
+    // Inside math portions, standardize ° to ^\circ
+    clean = clean.replace(/\$([^$]+)\$/g, (_, math) => {
+      const fixedMath = math.replace(/°/g, '^\\circ');
       try {
-        return katex.renderToString(math, {
+        return katex.renderToString(fixedMath, {
           throwOnError: false,
           displayMode: false,
         });
       } catch {
-        return math;
+        return fixedMath;
       }
     });
+
+    return clean;
   } catch {
     return latex;
   }
@@ -186,16 +224,66 @@ function preprocessTikz(code: string): string {
 }
 
 /**
+ * Splits TikZ body into statements by semicolons, properly respecting nested braces { ... } and brackets [ ... ].
+ * This prevents semicolons inside colors like fill={rgb,255:red,175;green,218;blue,198} from incorrectly splitting statements.
+ */
+function splitTikzStatements(code: string): string[] {
+  const statements: string[] = [];
+  let current = '';
+  let braceDepth = 0;
+  let bracketDepth = 0;
+
+  for (let i = 0; i < code.length; i++) {
+    const ch = code[i];
+    if (ch === '{') braceDepth++;
+    else if (ch === '}') braceDepth--;
+    else if (ch === '[') bracketDepth++;
+    else if (ch === ']') bracketDepth--;
+    else if (ch === ';' && braceDepth === 0 && bracketDepth === 0) {
+      if (current.trim()) statements.push(current.trim());
+      current = '';
+      continue;
+    }
+    current += ch;
+  }
+  if (current.trim()) statements.push(current.trim());
+  return statements;
+}
+
+/**
+ * Extracts custom styles defined as `name/.style={...}` with brace balancing.
+ */
+function extractCustomStyles(text: string): Map<string, string> {
+  const styles = new Map<string, string>();
+  const pattern = /([a-zA-Z0-9_-]+)\/\.style\s*=\s*\{/g;
+  let m;
+  while ((m = pattern.exec(text)) !== null) {
+    const name = m[1];
+    let depth = 1;
+    const startIdx = pattern.lastIndex;
+    let endIdx = startIdx;
+    while (endIdx < text.length && depth > 0) {
+      if (text[endIdx] === '{') depth++;
+      else if (text[endIdx] === '}') depth--;
+      endIdx++;
+    }
+    if (depth === 0) {
+      const def = text.slice(startIdx, endIdx - 1);
+      styles.set(name, def);
+    }
+  }
+  return styles;
+}
+
+/**
  * Checks if the TikZ code can be parsed and rendered by our native client-side engine.
  */
 export function canParseWithFastEngine(code: string): boolean {
   if (!code) return false;
-  // If it requires complex TeX packages like pgfplots/axis or external libraries
+  // If it requires complex external TeX engines like pgfplots/axis
   if (/\\begin\{axis\}/i.test(code)) return false;
-  if (/\\usetikzlibrary/i.test(code)) return false;
   if (/\\addplot/i.test(code)) return false;
 
-  // Standard geometric commands are all supported!
   return /\\(draw|fill|filldraw|node|coordinate|path)\b/i.test(code);
 }
 
@@ -220,17 +308,21 @@ export function parseTikz(code: string, baseScaleFactor: number = 40): ParseResu
 
   // Preprocess code
   const preprocessed = preprocessTikz(code);
-
   let scaleFactor = baseScaleFactor;
+
+  // Custom styles defined in environment or tikzset
+  const customStyles = extractCustomStyles(preprocessed);
 
   // Extract content inside \begin{tikzpicture}[options] ... \end{tikzpicture}
   let body = preprocessed;
-  const tikzEnvMatch = preprocessed.match(/\\begin\{tikzpicture\}(?:\[([^\]]*)\])?([\s\S]*?)\\end\{tikzpicture\}/);
+  const tikzEnvMatch = preprocessed.match(/\\begin\{tikzpicture\}(?:\[([\s\S]*?)\])?([\s\S]*?)\\end\{tikzpicture\}/);
   if (tikzEnvMatch) {
     const envOpts = tikzEnvMatch[1] || '';
     body = tikzEnvMatch[2];
 
-    // Check for scale=[...] in environment options
+    const envStyles = extractCustomStyles(envOpts);
+    envStyles.forEach((val, key) => customStyles.set(key, val));
+
     const scaleMatch = envOpts.match(/\bscale=([\d.]+)/);
     if (scaleMatch) {
       const parsedScale = parseFloat(scaleMatch[1]);
@@ -240,8 +332,8 @@ export function parseTikz(code: string, baseScaleFactor: number = 40): ParseResu
     }
   }
 
-  // Split into statements ending with semicolon
-  const rawStatements = body.split(';');
+  // Split into statements ending with semicolon with brace and bracket balance
+  const rawStatements = splitTikzStatements(body);
   let cursor: Point = { x: 0, y: 0 };
 
   // Parse coordinate: (x, y) or (angle:radius) or (A)
@@ -262,7 +354,6 @@ export function parseTikz(code: string, baseScaleFactor: number = 40): ParseResu
       s = s.slice(1, -1).trim();
     }
 
-    // Check if named coordinate
     if (namedCoords.has(s)) {
       const pt = namedCoords.get(s)!;
       return { point: pt, newCursor: pt };
@@ -301,7 +392,7 @@ export function parseTikz(code: string, baseScaleFactor: number = 40): ParseResu
     return { point: currentCursor, newCursor: currentCursor };
   }
 
-  // Parse options block: [thick, draw=blue, fill=red!20, ...]
+  // Parse options block: [thick, block, draw=blue, fill=red!20, ...]
   function parseOptions(optStr: string): TikzStyle {
     const style: TikzStyle = {
       strokeWidth: 1.5,
@@ -311,11 +402,18 @@ export function parseTikz(code: string, baseScaleFactor: number = 40): ParseResu
 
     if (!optStr) return style;
 
+    // Expand custom styles
+    let expandedOptStr = optStr;
+    customStyles.forEach((def, name) => {
+      const regex = new RegExp(`\\b${name}\\b`, 'g');
+      expandedOptStr = expandedOptStr.replace(regex, def);
+    });
+
     const opts: string[] = [];
     let currentOpt = '';
     let depth = 0;
-    for (let i = 0; i < optStr.length; i++) {
-      const ch = optStr[i];
+    for (let i = 0; i < expandedOptStr.length; i++) {
+      const ch = expandedOptStr[i];
       if (ch === '{' || ch === '[') depth++;
       else if (ch === '}' || ch === ']') depth--;
       else if (ch === ',' && depth === 0) {
@@ -355,13 +453,13 @@ export function parseTikz(code: string, baseScaleFactor: number = 40): ParseResu
       } else if (opt.startsWith('rounded corners')) {
         const val = opt.includes('=') ? parseFloat(opt.split('=')[1]) : 4;
         style.roundedCorners = val;
-      } else if (opt === '->' || opt === '-latex' || opt === '-stealth') {
-        style.arrowEnd = 'arrow-end';
-      } else if (opt === '<-' || opt === 'latex-' || opt === 'stealth-') {
-        style.arrowStart = 'arrow-start';
-      } else if (opt === '<->' || opt === 'latex-latex') {
+      } else if (opt.includes('<->') || opt.includes('latex-latex')) {
         style.arrowStart = 'arrow-start';
         style.arrowEnd = 'arrow-end';
+      } else if (opt.includes('->') || opt.includes('-latex') || opt.includes('-stealth')) {
+        style.arrowEnd = 'arrow-end';
+      } else if (opt.includes('<-') || opt.includes('latex-') || opt.includes('stealth-')) {
+        style.arrowStart = 'arrow-start';
       } else if (opt.includes('|-|')) {
         style.arrowStart = 'bar-start';
         style.arrowEnd = 'bar-end';
@@ -374,37 +472,45 @@ export function parseTikz(code: string, baseScaleFactor: number = 40): ParseResu
   }
 
   function extractInlineNodes(pathStr: string, fallbackPos: Point) {
-    const inlineNodeRegex = /node\s*(?:\[([^\]]*)\])?\s*\{([^}]*)\}/g;
-    let match;
-    while ((match = inlineNodeRegex.exec(pathStr)) !== null) {
-      const optStr = match[1] || '';
-      const text = match[2] || '';
-      const rendered = renderMathText(text);
+    const tokens = tokenizePath(pathStr);
+    for (const token of tokens) {
+      if (token.type === 'node') {
+        const optStr = token.optStr || '';
+        const text = token.text || '';
+        const rendered = renderMathText(text);
 
-      let anchor = 'middle';
-      let dy = -10;
-      let dx = 0;
-      if (optStr.includes('above left')) { anchor = 'end'; dy = -14; dx = -8; }
-      else if (optStr.includes('above right')) { anchor = 'start'; dy = -14; dx = 8; }
-      else if (optStr.includes('below left')) { anchor = 'end'; dy = 16; dx = -8; }
-      else if (optStr.includes('below right')) { anchor = 'start'; dy = 16; dx = 8; }
-      else if (optStr.includes('above')) dy = -14;
-      else if (optStr.includes('below')) dy = 16;
-      else if (optStr.includes('left')) { anchor = 'end'; dx = -10; }
-      else if (optStr.includes('right')) { anchor = 'start'; dx = 10; }
+        let anchor = 'middle';
+        let dy = -10;
+        let dx = 0;
+        if (optStr.includes('above left')) { anchor = 'end'; dy = -14; dx = -8; }
+        else if (optStr.includes('above right')) { anchor = 'start'; dy = -14; dx = 8; }
+        else if (optStr.includes('below left')) { anchor = 'end'; dy = 16; dx = -8; }
+        else if (optStr.includes('below right')) { anchor = 'start'; dy = 16; dx = 8; }
+        else if (optStr.includes('above')) dy = -14;
+        else if (optStr.includes('below')) dy = 16;
+        else if (optStr.includes('left')) { anchor = 'end'; dx = -10; }
+        else if (optStr.includes('right')) { anchor = 'start'; dx = 10; }
 
-      const px = fallbackPos.x * scaleFactor + dx;
-      const py = -fallbackPos.y * scaleFactor + dy;
+        const px = fallbackPos.x * scaleFactor + dx;
+        const py = -fallbackPos.y * scaleFactor + dy;
 
-      svgElements.push(`
-        <foreignObject x="${px - 100}" y="${py - 15}" width="200" height="30" style="overflow: visible;">
-          <div xmlns="http://www.w3.org/1999/xhtml" style="display: flex; justify-content: ${
-            anchor === 'start' ? 'flex-start' : anchor === 'end' ? 'flex-end' : 'center'
-          }; align-items: center; width: 100%; height: 100%; font-size: 13.5px; font-weight: 500; font-family: 'Noto Sans KR', 'Noto Serif KR', 'KaTeX_Main', sans-serif; color: #1e293b; pointer-events: none; text-shadow: 0 1px 2px rgba(255,255,255,0.9);">
-            ${rendered}
-          </div>
-        </foreignObject>
-      `);
+        // Mask background if fill=white or fill requested
+        if (optStr.includes('fill=white') || optStr.includes('fill=')) {
+          svgElements.push(`
+            <rect x="${px - 45}" y="${py - 11}" width="90" height="22" rx="2" fill="#ffffff" />
+          `);
+        }
+
+        svgElements.push(`
+          <foreignObject x="${px - 100}" y="${py - 15}" width="200" height="30" style="overflow: visible;">
+            <div xmlns="http://www.w3.org/1999/xhtml" style="display: flex; justify-content: ${
+              anchor === 'start' ? 'flex-start' : anchor === 'end' ? 'flex-end' : 'center'
+            }; align-items: center; width: 100%; height: 100%; font-size: 13.5px; font-weight: 500; font-family: 'Noto Sans KR', 'Noto Serif KR', 'KaTeX_Main', sans-serif; color: #1e293b; pointer-events: none; text-shadow: 0 1px 2px rgba(255,255,255,0.85);">
+              ${rendered}
+            </div>
+          </foreignObject>
+        `);
+      }
     }
   }
 
@@ -424,12 +530,23 @@ export function parseTikz(code: string, baseScaleFactor: number = 40): ParseResu
     }
 
     // 2. Standalone \node [options] (name)? at (coords)? {text}
-    const nodeMatch = stmt.match(/\\node\s*(?:\[([^\]]*)\])?\s*(?:\(([^)]+)\))?\s*(?:at\s*(\([^)]+\)))?\s*\{([\s\S]*)\}/);
-    if (stmt.startsWith('\\node') && nodeMatch) {
-      const optStr = nodeMatch[1] || '';
-      const name = nodeMatch[2] ? nodeMatch[2].trim() : undefined;
-      const atStr = nodeMatch[3];
-      const content = nodeMatch[4] || '';
+    // Match balanced braces for content
+    const nodeHeaderMatch = stmt.match(/^\\node\s*(?:\[([\s\S]*?)\])?\s*(?:\(([^)]+)\))?\s*(?:at\s*(\([^)]+\)))?\s*\{/);
+    if (stmt.startsWith('\\node') && nodeHeaderMatch) {
+      const optStr = nodeHeaderMatch[1] || '';
+      const name = nodeHeaderMatch[2] ? nodeHeaderMatch[2].trim() : undefined;
+      const atStr = nodeHeaderMatch[3];
+
+      // Extract balanced content from opening {
+      const startBraceIdx = stmt.indexOf('{');
+      let depth = 1;
+      let endBraceIdx = startBraceIdx + 1;
+      while (endBraceIdx < stmt.length && depth > 0) {
+        if (stmt[endBraceIdx] === '{') depth++;
+        else if (stmt[endBraceIdx] === '}') depth--;
+        endBraceIdx++;
+      }
+      const content = stmt.slice(startBraceIdx + 1, endBraceIdx - 1);
 
       const pos = atStr ? parseCoordinate(atStr, cursor).point : cursor;
       if (name) namedCoords.set(name, pos);
@@ -515,8 +632,28 @@ export function parseTikz(code: string, baseScaleFactor: number = 40): ParseResu
     const isShade = stmt.startsWith('\\shade');
 
     if (isDraw || isFill || isFillDraw || isShade) {
-      const optMatch = stmt.match(/^\\(?:draw|fill|filldraw|shade)\s*(?:\[([^\]]*)\])?/);
-      const optStr = optMatch && optMatch[1] ? optMatch[1] : '';
+      let optStr = '';
+      let pathBody = stmt;
+
+      // Match options after \draw[ ... ] with bracket balance
+      const cmdMatch = stmt.match(/^\\(?:draw|fill|filldraw|shade)/);
+      if (cmdMatch) {
+        let afterCmd = stmt.slice(cmdMatch[0].length).trim();
+        if (afterCmd.startsWith('[')) {
+          let bDepth = 1;
+          let idx = 1;
+          while (idx < afterCmd.length && bDepth > 0) {
+            if (afterCmd[idx] === '[') bDepth++;
+            else if (afterCmd[idx] === ']') bDepth--;
+            idx++;
+          }
+          optStr = afterCmd.slice(1, idx - 1);
+          pathBody = afterCmd.slice(idx).trim();
+        } else {
+          pathBody = afterCmd;
+        }
+      }
+
       const style = parseOptions(optStr);
 
       if (isDraw && !style.drawColor) style.drawColor = '#1e293b';
@@ -525,8 +662,6 @@ export function parseTikz(code: string, baseScaleFactor: number = 40): ParseResu
         if (!style.drawColor) style.drawColor = '#1e293b';
         if (!style.fillColor) style.fillColor = '#e2e8f0';
       }
-
-      let pathBody = stmt.replace(/^\\(?:draw|fill|filldraw|shade)\s*(?:\[[^\]]*\])?/, '').trim();
 
       // Grid: (x1, y1) grid (x2, y2)
       const gridMatch = pathBody.match(/(\([^)]+\))\s*grid\s*(?:\[step=([^\]]+)\])?\s*(\([^)]+\))/);
@@ -601,7 +736,7 @@ export function parseTikz(code: string, baseScaleFactor: number = 40): ParseResu
         const radiusStr = circleMatch[2] || circleMatch[3] || '1';
         let radius = parseFloat(radiusStr.replace(/cm|pt|mm/g, ''));
         if (radiusStr.includes('pt')) {
-          radius = radius * 1.33; // pt to px
+          radius = radius * 1.33;
         } else {
           radius = radius * scaleFactor;
         }
@@ -621,7 +756,6 @@ export function parseTikz(code: string, baseScaleFactor: number = 40): ParseResu
             stroke-dasharray="${style.strokeDasharray || 'none'}" />
         `);
 
-        // Also extract inline node attached to circle: e.g. \fill (0,5) circle (2pt) node[left] {시작점};
         extractInlineNodes(pathBody, center);
         continue;
       }
@@ -704,6 +838,13 @@ export function parseTikz(code: string, baseScaleFactor: number = 40): ParseResu
           const py = -nodePos.y * scaleFactor + dy;
 
           const transformAttr = slopeDeg !== 0 ? `transform="rotate(${slopeDeg} ${px} ${py})"` : '';
+
+          // If node requested fill=white (standard in TikZ for dimension labels)
+          if (optStr.includes('fill=white') || optStr.includes('fill=')) {
+            svgElements.push(`
+              <rect x="${px - 45}" y="${py - 11}" width="90" height="22" rx="2" fill="#ffffff" ${transformAttr} />
+            `);
+          }
 
           svgElements.push(`
             <foreignObject x="${px - 100}" y="${py - 15}" width="200" height="30" style="overflow: visible;" ${transformAttr}>
@@ -813,32 +954,98 @@ interface PathToken {
   end?: string;
 }
 
+/**
+ * Tokenizes path body with brace and bracket balance so nested braces like node[...]{$22\text{ cm}$} are never broken.
+ */
 function tokenizePath(pathStr: string): PathToken[] {
   const tokens: PathToken[] = [];
-  const str = pathStr.replace(/--\s*cycle\b/g, 'cycle').trim();
+  const s = pathStr.replace(/--\s*cycle\b/g, 'cycle').trim();
+  let i = 0;
 
-  const tokenRegex = /(node\s*(?:\[([^\]]*)\])?\s*\{([^}]*)\})|(\([^)]+\))|(\.\.\s*controls\s*(\([^)]+\))\s*and\s*(\([^)]+\))\s*\.\.\s*(\([^)]+\)))|(\bcycle\b)/g;
-
-  let m;
-  while ((m = tokenRegex.exec(str)) !== null) {
-    if (m[1]) {
-      tokens.push({
-        type: 'node',
-        optStr: m[2] || '',
-        text: m[3] || '',
-      });
-    } else if (m[4]) {
-      tokens.push({ type: 'coord', value: m[4] });
-    } else if (m[5]) {
-      tokens.push({
-        type: 'curve',
-        c1: m[6],
-        c2: m[7],
-        end: m[8],
-      });
-    } else if (m[9]) {
-      tokens.push({ type: 'cycle' });
+  while (i < s.length) {
+    if (s[i] === ' ' || s[i] === '\t' || s[i] === '\n' || s[i] === '\r') {
+      i++;
+      continue;
     }
+    if (s.startsWith('--', i)) {
+      i += 2;
+      continue;
+    }
+
+    // Check cycle
+    if (s.startsWith('cycle', i) && (i + 5 === s.length || /[\s;]/.test(s[i + 5]))) {
+      tokens.push({ type: 'cycle' });
+      i += 5;
+      continue;
+    }
+
+    // Check node
+    if (s.startsWith('node', i) && (i + 4 === s.length || /[\s\[{]/.test(s[i + 4]))) {
+      i += 4;
+      while (i < s.length && /\s/.test(s[i])) i++;
+
+      let optStr = '';
+      if (i < s.length && s[i] === '[') {
+        let bDepth = 1;
+        const startOpt = i + 1;
+        i++;
+        while (i < s.length && bDepth > 0) {
+          if (s[i] === '[') bDepth++;
+          else if (s[i] === ']') bDepth--;
+          i++;
+        }
+        optStr = s.slice(startOpt, i - 1);
+      }
+
+      while (i < s.length && /\s/.test(s[i])) i++;
+
+      let text = '';
+      if (i < s.length && s[i] === '{') {
+        let depth = 1;
+        const startText = i + 1;
+        i++;
+        while (i < s.length && depth > 0) {
+          if (s[i] === '{') depth++;
+          else if (s[i] === '}') depth--;
+          i++;
+        }
+        text = s.slice(startText, i - 1);
+      }
+
+      tokens.push({ type: 'node', optStr, text });
+      continue;
+    }
+
+    // Check coordinate (...)
+    if (s[i] === '(') {
+      let depth = 1;
+      const startC = i;
+      i++;
+      while (i < s.length && depth > 0) {
+        if (s[i] === '(') depth++;
+        else if (s[i] === ')') depth--;
+        i++;
+      }
+      tokens.push({ type: 'coord', value: s.slice(startC, i) });
+      continue;
+    }
+
+    // Check curve: .. controls (c1) and (c2) .. (end)
+    if (s.startsWith('..', i)) {
+      const curveMatch = s.slice(i).match(/^\.\.\s*controls\s*(\([^)]+\))\s*and\s*(\([^)]+\))\s*\.\.\s*(\([^)]+\))/);
+      if (curveMatch) {
+        tokens.push({
+          type: 'curve',
+          c1: curveMatch[1],
+          c2: curveMatch[2],
+          end: curveMatch[3],
+        });
+        i += curveMatch[0].length;
+        continue;
+      }
+    }
+
+    i++;
   }
 
   return tokens;

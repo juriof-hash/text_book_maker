@@ -83,8 +83,19 @@ export function sanitizeTikZCode(code: string): string {
   // Strip \documentclass if user pasted a full standalone document
   s = s.replace(/\\documentclass(?:\[[^\]]*\])?\{[^}]+\}/gi, '');
 
-  // Replace Unicode degree symbol ° with LaTeX math notation ^{\circ}
-  s = s.replace(/°/g, '^{\\circ}');
+  // Standardize angle and degree notation:
+  // Convert 51° or 51^\circ or 51^{\circ} to $51^\circ$ (ensures math mode with family 2 cmsy fonts, preventing "ffi" ligature)
+  s = s.split(/(\$[^$]*\$)/g).map((part) => {
+    if (part.startsWith('$') && part.endsWith('$')) {
+      return part.replace(/°/g, '^\\circ');
+    }
+    // Outside math mode:
+    // Convert numbers with degree symbol or raw superscript into math mode: 51° or 51^\circ -> $51^\circ$
+    let clean = part.replace(/\b(\d+)\s*(?:°|\^(?:\{\\circ\}|\\circ(?![a-zA-Z])))/g, (_m, num) => `$${num}^\\circ$`);
+    // Any remaining standalone °
+    clean = clean.replace(/°/g, '$^\\circ$');
+    return clean;
+  }).join('');
 
   // Map Tailwind & CSS color names to standard LaTeX colors
   s = s.replace(/\b(?:stone|zinc|neutral|slate)-[0-9]+\b/gi, 'black');
@@ -188,8 +199,8 @@ export function prepareTikZForRendering(rawCode: string): PreparedTikZ {
   // 6. Strip \begin{document} and \end{document} to prevent fatal nested document error
   code = code.replace(/\\begin\{document\}/gi, '').replace(/\\end\{document\}/gi, '');
 
-  // 7. Replace Unicode degree symbol ° with LaTeX math notation ^{\circ}
-  code = code.replace(/°/g, '^{\\circ}');
+  // 7. Sanitize Tailwind & non-standard CSS colors and standardize degree notation
+  code = sanitizeTikZCode(code);
 
   // 8. Fix common LaTeX syntax escape issues
   code = code.replace(/\\\\(draw|fill|node|coordinate|path|clip|shade|foreach|matrix|pic|definecolor)\b/g, '\\$1');

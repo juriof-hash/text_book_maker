@@ -109,6 +109,42 @@ const PRESET_SNIPPETS = [
 \\end{tikzpicture}`
   },
   {
+    title: '직사각형 블록 쌓기와 치수 (TikZ)',
+    type: 'tikz' as IllustrationType,
+    code: `\\begin{tikzpicture}[
+    scale=0.9, 
+    >=stealth,
+    block/.style={thick, fill={rgb,255:red,175;green,218;blue,198}}
+]
+  % 바닥선
+  \\draw[thick] (-0.8, 0) -- (6.0, 0);
+
+  % [그림 1]
+  \\draw[block] (0, 0) rectangle (0.6, 1.2);
+  \\draw[block] (0.6, 0) rectangle (1.8, 0.6);
+  \\draw[block] (-0.3, 1.2) rectangle (0.9, 1.8);
+  \\draw[block] (-0.3, 1.8) rectangle (0.9, 2.4);
+  \\draw[block] (0, 2.4) rectangle (0.6, 3.6);
+
+  \\draw (0.6, 3.6) -- (1.9, 3.6);
+  \\draw (1.8, 0.6) -- (1.9, 0.6);
+  \\draw[<->] (1.6, 0.6) -- (1.6, 3.6) node[midway, fill=white, inner sep=2pt] {$22\\text{ cm}$};
+  \\node at (0.3, -0.6) {[그림 1]};
+
+  % [그림 2]
+  \\draw[block] (3.6, 0) rectangle (4.8, 0.6);
+  \\draw[block] (3.9, 0.6) rectangle (4.5, 1.8);
+  \\draw[block] (3.6, 1.8) rectangle (4.8, 2.4);
+  \\draw[block] (3.9, 2.4) rectangle (4.5, 3.6);
+  \\draw[block] (3.6, 3.6) rectangle (4.8, 4.2);
+
+  \\draw (4.8, 4.2) -- (5.7, 4.2);
+  \\draw (4.8, 0) -- (5.7, 0);
+  \\draw[<->] (5.3, 0) -- (5.3, 4.2) node[midway, fill=white, inner sep=2pt] {$32\\text{ cm}$};
+  \\node at (4.2, -0.6) {[그림 2]};
+\\end{tikzpicture}`
+  },
+  {
     title: '벤 다이어그램 (SVG)',
     type: 'svg' as IllustrationType,
     code: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 160" width="260" height="150">

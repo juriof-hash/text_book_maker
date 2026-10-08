@@ -150,6 +150,26 @@ export function restoreKoreanInTikZElement(
   if (innerChanged) {
     containerOrSvg.innerHTML = inner;
   }
+
+  // Also repair any degree symbols that rendered as "ffi" ligature due to font family mismatch
+  fixDegreeSymbolsInElement(containerOrSvg);
+}
+
+/**
+ * Repairs degree symbols rendered as "ffi" ligature (OT1 slot 14 in cmr font) into clean degree symbols (°).
+ */
+export function fixDegreeSymbolsInElement(containerOrSvg: HTMLElement | SVGElement | null): void {
+  if (!containerOrSvg) return;
+  const textNodes = Array.from(containerOrSvg.querySelectorAll<SVGElement>('text, tspan'));
+  for (const textEl of textNodes) {
+    const raw = (textEl.textContent || '').trim();
+    if (raw === 'ffi' || raw === '\uFB03' || raw === '\uF00E' || raw === '&#xf00e;' || raw.includes('ffi')) {
+      textEl.textContent = raw.replace(/ffi|\uFB03|\uF00E|&#xf00e;/g, '°');
+      textEl.setAttribute('font-family', "'Noto Sans KR', sans-serif");
+      textEl.style.fontFamily = "'Noto Sans KR', sans-serif";
+      textEl.style.fontWeight = '600';
+    }
+  }
 }
 
 /**
@@ -159,16 +179,18 @@ export function restoreKoreanInTikZSvgString(
   svgString: string,
   replacements: TikZReplacement[]
 ): string {
-  if (!svgString || !replacements || replacements.length === 0) return svgString;
+  if (!svgString) return svgString;
 
   let restored = svgString;
 
-  for (const item of replacements) {
-    restored = restored
-      .split(item.entityLower).join(item.originalText)
-      .split(item.entityUpper).join(item.originalText)
-      .split(item.domPattern).join(item.originalText)
-      .split(item.placeholder).join(item.originalText);
+  if (replacements && replacements.length > 0) {
+    for (const item of replacements) {
+      restored = restored
+        .split(item.entityLower).join(item.originalText)
+        .split(item.entityUpper).join(item.originalText)
+        .split(item.domPattern).join(item.originalText)
+        .split(item.placeholder).join(item.originalText);
+    }
   }
 
   // Set font-family on <text> elements containing Korean characters
@@ -188,5 +210,29 @@ export function restoreKoreanInTikZSvgString(
     return fullMatch;
   });
 
+  // Repair degree symbols rendered as "ffi" ligature
+  restored = fixDegreeSymbolsInSvgString(restored);
+
   return restored;
+}
+
+/**
+ * Repairs degree symbols rendered as "ffi" ligature in SVG strings.
+ */
+export function fixDegreeSymbolsInSvgString(svgString: string): string {
+  if (!svgString) return svgString;
+  let res = svgString;
+
+  // Replace <text ...>ffi</text> or <text ...>&#xf00e;</text>
+  res = res.replace(/(<text\b[^>]*>)(?:ffi|&#xf00e;|&#xfb03;|\uFB03|\uF00E)(<\/text>)/gi, (_m, p1, p2) => {
+    let fixedP1 = p1;
+    if (/font-family="[^"]*"/i.test(fixedP1)) {
+      fixedP1 = fixedP1.replace(/font-family="[^"]*"/i, 'font-family="\'Noto Sans KR\', sans-serif"');
+    } else {
+      fixedP1 = fixedP1.replace(/<text\b/i, '<text font-family="\'Noto Sans KR\', sans-serif"');
+    }
+    return `${fixedP1}°${p2}`;
+  });
+
+  return res;
 }
