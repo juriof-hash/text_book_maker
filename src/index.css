@@ -32,15 +32,18 @@ mjx-container[jax="SVG"][display="true"] {
   margin: 0.6em 0 !important;
 }
 
-/* TikZ SVG container & text label visibility guarantee */
+/* TikZ SVG container & illustration containment */
 .tikz-svg-container {
-  overflow: visible !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
 }
 
 .tikz-svg-container div {
   max-width: 100% !important;
   height: auto !important;
-  overflow: visible !important;
   display: flex !important;
   justify-content: center !important;
   align-items: center !important;
@@ -48,16 +51,20 @@ mjx-container[jax="SVG"][display="true"] {
 
 .tikz-svg-container svg {
   max-width: 100% !important;
+  max-height: 240px !important;
   height: auto !important;
   display: block !important;
   margin: 0 auto !important;
-  overflow: visible !important;
 }
 
 .tikz-svg-container svg text {
   fill: #1c1917 !important;
   font-family: cmr10, cmmi10, "Computer Modern", "Noto Serif KR", Times, serif !important;
-  overflow: visible !important;
+}
+
+/* Ensure user line breaks and answer choices (①~⑤) preserve line breaks */
+.whitespace-pre-line {
+  white-space: pre-line !important;
 }
 
 /* A4 Page styles for screen preview */

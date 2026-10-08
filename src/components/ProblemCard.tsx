@@ -58,7 +58,7 @@ export const ProblemCard: React.FC<ProblemCardProps> = ({
             {/* Mini Problem Text */}
             <div
               ref={miniTextRef}
-              className="text-[11px] leading-relaxed text-stone-700 line-clamp-5 font-serif-kr select-none"
+              className="text-[11px] leading-relaxed text-stone-700 line-clamp-5 font-serif-kr select-none whitespace-pre-line"
             >
               {problem.cleanedText || problem.rawText}
             </div>

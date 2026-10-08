@@ -201,6 +201,7 @@ export const IllustrationViewer: React.FC<IllustrationViewerProps> = ({
 
   const scaleFactor = (scale || 100) / 100;
   const zoomStyle: React.CSSProperties = {
+    maxWidth: '100%',
     transform: scaleFactor !== 1 ? `scale(${scaleFactor})` : undefined,
     transformOrigin: 'center center'
   };
@@ -208,7 +209,7 @@ export const IllustrationViewer: React.FC<IllustrationViewerProps> = ({
   if (type === 'image') {
     if (imageError) {
       return (
-        <div className={`flex flex-col items-center justify-center p-3 bg-stone-50 border border-stone-200 rounded text-stone-400 text-xs my-2 ${className}`}>
+        <div className={`flex flex-col items-center justify-center p-3 bg-stone-50 border border-stone-200 rounded text-stone-400 text-xs my-2 max-w-full ${className}`}>
           <ImageOff className="w-5 h-5 mb-1 text-stone-300" />
           <span>이미지를 불러올 수 없습니다</span>
           <span className="text-[10px] text-stone-400 font-mono-code truncate max-w-xs mt-0.5">
@@ -219,7 +220,7 @@ export const IllustrationViewer: React.FC<IllustrationViewerProps> = ({
     }
 
     return (
-      <div className={`flex justify-center items-center overflow-hidden my-2 ${className}`}>
+      <div className={`flex justify-center items-center overflow-hidden my-2 max-w-full ${className}`}>
         <img
           src={code}
           alt="문제 삽화"
@@ -234,7 +235,7 @@ export const IllustrationViewer: React.FC<IllustrationViewerProps> = ({
 
   return (
     <div
-      className={`relative flex flex-col justify-center items-center my-2 select-none ${className}`}
+      className={`relative flex flex-col justify-center items-center my-2 select-none max-w-full overflow-hidden ${className}`}
       style={zoomStyle}
     >
       {loading && !cachedHtml && (
@@ -256,13 +257,13 @@ export const IllustrationViewer: React.FC<IllustrationViewerProps> = ({
       {cachedHtml ? (
         <div
           ref={containerRef}
-          className="tikz-svg-container w-full flex justify-center items-center"
+          className="tikz-svg-container w-full max-w-full flex justify-center items-center overflow-hidden"
           dangerouslySetInnerHTML={{ __html: cachedHtml }}
         />
       ) : (
         <div
           ref={containerRef}
-          className="tikz-svg-container w-full flex justify-center items-center"
+          className="tikz-svg-container w-full max-w-full flex justify-center items-center overflow-hidden"
         />
       )}
     </div>

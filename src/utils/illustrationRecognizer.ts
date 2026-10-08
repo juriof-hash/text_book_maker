@@ -32,6 +32,9 @@ export function normalizeCodeString(str: unknown): string {
   // Strip Markdown code fences if present: ```tikz ... ``` or ```latex ... ```
   s = s.replace(/^```(?:tikz|latex|svg|html)?\s*\n?([\s\S]*?)\n?```$/i, '$1');
 
+  // Ensure choice ① starts on a newline if stuck directly to question sentence punctuation
+  s = s.replace(/([?!.:])\s*(①)/g, '$1\n$2');
+
   return s.trim();
 }
 
@@ -240,6 +243,20 @@ export function ensureSVGWrapping(code: string): string {
  * Scans question text for in-line embedded illustrations.
  * Extracts the diagram and returns cleaned text with natural editorial phrasing.
  */
+function cleanExtractedText(text: string): string {
+  let s = text;
+  // Collapse only redundant horizontal whitespace (spaces, tabs) without erasing newlines
+  s = s.replace(/[^\S\r\n]{2,}/g, ' ');
+  // Collapse 3 or more consecutive newlines into max 2
+  s = s.replace(/\n{3,}/g, '\n\n');
+  // Ensure a newline before ① if directly preceded by sentence ending punctuation (e.g. "고르면? ①" -> "고르면?\n①")
+  s = s.replace(/([?!.:])\s*(①)/g, '$1\n$2');
+  return s.trim();
+}
+
+/**
+ * Extracts inline illustration code from problem text.
+ */
 export function extractInlineIllustration(text: string): {
   found: boolean;
   type: IllustrationType;
@@ -259,7 +276,7 @@ export function extractInlineIllustration(text: string): {
   const tagMatch = normalized.match(tagBlockRegex);
   if (tagMatch) {
     const rawContent = tagMatch[1].trim();
-    const cleaned = normalized.replace(tagBlockRegex, '').replace(/\s{2,}/g, ' ').trim();
+    const cleaned = cleanExtractedText(normalized.replace(tagBlockRegex, ''));
     notes.push('태그 [삽화]...[/삽화] 블록 감지 및 추출');
 
     if (isSVGCode(rawContent)) {
@@ -277,7 +294,7 @@ export function extractInlineIllustration(text: string): {
   const singleTagMatch = normalized.match(singleTagRegex);
   if (singleTagMatch) {
     const rawContent = singleTagMatch[1].trim();
-    const cleaned = normalized.replace(singleTagRegex, '').replace(/\s{2,}/g, ' ').trim();
+    const cleaned = cleanExtractedText(normalized.replace(singleTagRegex, ''));
     notes.push('[삽화: ...] 태그 감지 및 추출');
 
     if (isSVGCode(rawContent)) {
@@ -295,8 +312,7 @@ export function extractInlineIllustration(text: string): {
   const tikzMatch = normalized.match(tikzRegex);
   if (tikzMatch) {
     const code = tikzMatch[0].trim();
-    // Replace the bulky code with a clean reading marker or remove it cleanly
-    const cleaned = normalized.replace(tikzRegex, '').replace(/\s{2,}/g, ' ').trim();
+    const cleaned = cleanExtractedText(normalized.replace(tikzRegex, ''));
     notes.push('본문 내 TikZ(\\begin{tikzpicture}) 코드 자동 감지 및 분리');
     return { found: true, type: 'tikz', code, cleanedText: cleaned, notes };
   }
@@ -306,7 +322,7 @@ export function extractInlineIllustration(text: string): {
   const svgMatch = normalized.match(svgRegex);
   if (svgMatch) {
     const code = ensureSVGWrapping(svgMatch[0].trim());
-    const cleaned = normalized.replace(svgRegex, '').replace(/\s{2,}/g, ' ').trim();
+    const cleaned = cleanExtractedText(normalized.replace(svgRegex, ''));
     notes.push('본문 내 SVG(<svg>...</svg>) 벡터 코드 감지 및 분리');
     return { found: true, type: 'svg', code, cleanedText: cleaned, notes };
   }
@@ -316,7 +332,7 @@ export function extractInlineIllustration(text: string): {
   const mdImgMatch = normalized.match(mdImgRegex);
   if (mdImgMatch) {
     const url = mdImgMatch[2].trim();
-    const cleaned = normalized.replace(mdImgRegex, '').replace(/\s{2,}/g, ' ').trim();
+    const cleaned = cleanExtractedText(normalized.replace(mdImgRegex, ''));
     notes.push('마크다운 이미지 문법(![...](...)) 감지 및 분리');
     return { found: true, type: 'image', code: url, cleanedText: cleaned, notes };
   }
@@ -326,7 +342,7 @@ export function extractInlineIllustration(text: string): {
   const htmlImgMatch = normalized.match(htmlImgRegex);
   if (htmlImgMatch) {
     const url = htmlImgMatch[1].trim();
-    const cleaned = normalized.replace(htmlImgRegex, '').replace(/\s{2,}/g, ' ').trim();
+    const cleaned = cleanExtractedText(normalized.replace(htmlImgRegex, ''));
     notes.push('HTML <img> 태그 감지 및 분리');
     return { found: true, type: 'image', code: url, cleanedText: cleaned, notes };
   }
@@ -335,7 +351,7 @@ export function extractInlineIllustration(text: string): {
     found: false,
     type: 'none',
     code: '',
-    cleanedText: normalized,
+    cleanedText: cleanExtractedText(normalized),
     notes: []
   };
 }

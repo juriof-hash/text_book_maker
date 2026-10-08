@@ -283,11 +283,13 @@ export function canParseWithFastEngine(code: string): boolean {
   // If it requires complex external TeX engines like pgfplots/axis
   if (/\\begin\{axis\}/i.test(code)) return false;
   if (/\\addplot/i.test(code)) return false;
+  // Matrix or tabular structures are best handled by full TeX engine
+  if (/\\matrix\b|\\begin\{tabular\}|\btabular\b/i.test(code)) return false;
 
   return /\\(draw|fill|filldraw|node|coordinate|path)\b/i.test(code);
 }
 
-export function parseTikz(code: string, baseScaleFactor: number = 40): ParseResult {
+export function parseTikz(code: string, baseScaleFactor: number = 26): ParseResult {
   const errors: string[] = [];
   const warnings: string[] = [];
   const namedCoords = new Map<string, Point>();
@@ -613,11 +615,23 @@ export function parseTikz(code: string, baseScaleFactor: number = 40): ParseResu
         }
       }
 
+      const textLen = (content || '').length;
+      const estimatedWidth = Math.max(30, Math.min(140, textLen * 10 + 16));
+      const halfW = estimatedWidth / 2;
+
+      // Track node bounds so SVG viewBox encompasses the label without clipping or artificial overflow
+      trackPoint({ x: pos.x - (halfW / scaleFactor), y: pos.y });
+      trackPoint({ x: pos.x + (halfW / scaleFactor), y: pos.y });
+      trackPoint({ x: pos.x, y: pos.y + (12 / scaleFactor) });
+      trackPoint({ x: pos.x, y: pos.y - (12 / scaleFactor) });
+
+      const nodeX = anchor === 'start' ? posX : anchor === 'end' ? posX - estimatedWidth : posX - halfW;
+
       svgElements.push(`
-        <foreignObject x="${posX - 100}" y="${posY - 20 + (dy === '-0.6em' ? -15 : dy === '1.2em' ? 10 : 0)}" width="200" height="40" style="overflow: visible;">
+        <foreignObject x="${nodeX}" y="${posY - 14 + (dy === '-0.6em' ? -12 : dy === '1.2em' ? 8 : 0)}" width="${estimatedWidth}" height="28" style="overflow: visible;">
           <div xmlns="http://www.w3.org/1999/xhtml" style="display: flex; justify-content: ${
             anchor === 'start' ? 'flex-start' : anchor === 'end' ? 'flex-end' : 'center'
-          }; align-items: center; width: 100%; height: 100%; color: ${fontColor}; font-size: 13.5px; font-weight: 500; font-family: 'Noto Sans KR', 'Noto Serif KR', 'KaTeX_Main', sans-serif; pointer-events: none; text-shadow: 0 1px 2px rgba(255,255,255,0.85);">
+          }; align-items: center; width: 100%; height: 100%; color: ${fontColor}; font-size: 12.5px; font-weight: 500; font-family: 'Noto Sans KR', 'Noto Serif KR', 'KaTeX_Main', sans-serif; pointer-events: none; text-shadow: 0 1px 2px rgba(255,255,255,0.85);">
             ${renderedHtml}
           </div>
         </foreignObject>
@@ -839,18 +853,24 @@ export function parseTikz(code: string, baseScaleFactor: number = 40): ParseResu
 
           const transformAttr = slopeDeg !== 0 ? `transform="rotate(${slopeDeg} ${px} ${py})"` : '';
 
+          const textLen = (text || '').length;
+          const estimatedWidth = Math.max(30, Math.min(130, textLen * 9 + 16));
+          const halfW = estimatedWidth / 2;
+
           // If node requested fill=white (standard in TikZ for dimension labels)
           if (optStr.includes('fill=white') || optStr.includes('fill=')) {
             svgElements.push(`
-              <rect x="${px - 45}" y="${py - 11}" width="90" height="22" rx="2" fill="#ffffff" ${transformAttr} />
+              <rect x="${px - halfW}" y="${py - 11}" width="${estimatedWidth}" height="22" rx="2" fill="#ffffff" ${transformAttr} />
             `);
           }
 
+          const nodeX = anchor === 'start' ? px : anchor === 'end' ? px - estimatedWidth : px - halfW;
+
           svgElements.push(`
-            <foreignObject x="${px - 100}" y="${py - 15}" width="200" height="30" style="overflow: visible;" ${transformAttr}>
+            <foreignObject x="${nodeX}" y="${py - 13}" width="${estimatedWidth}" height="26" style="overflow: visible;" ${transformAttr}>
               <div xmlns="http://www.w3.org/1999/xhtml" style="display: flex; justify-content: ${
                 anchor === 'start' ? 'flex-start' : anchor === 'end' ? 'flex-end' : 'center'
-              }; align-items: center; width: 100%; height: 100%; font-size: 13.5px; font-weight: 500; font-family: 'Noto Sans KR', 'Noto Serif KR', 'KaTeX_Main', sans-serif; color: #1e293b; pointer-events: none; text-shadow: 0 1px 2px rgba(255,255,255,0.85);">
+              }; align-items: center; width: 100%; height: 100%; font-size: 12px; font-weight: 500; font-family: 'Noto Sans KR', 'Noto Serif KR', 'KaTeX_Main', sans-serif; color: #1e293b; pointer-events: none; text-shadow: 0 1px 2px rgba(255,255,255,0.85);">
                 ${rendered}
               </div>
             </foreignObject>
@@ -922,9 +942,9 @@ export function parseTikz(code: string, baseScaleFactor: number = 40): ParseResu
   const finalSvg = `
 <svg xmlns="http://www.w3.org/2000/svg" 
   viewBox="${viewBoxStr}" 
-  width="100%" 
-  height="100%" 
-  style="display: block; max-width: 100%; max-height: 100%;"
+  width="${Math.round(width)}px" 
+  height="${Math.round(height)}px" 
+  style="display: block; max-width: 100%; height: auto; margin: 0 auto;"
   preserveAspectRatio="xMidYMid meet">
   ${defs}
   <g class="tikz-diagram-layer">

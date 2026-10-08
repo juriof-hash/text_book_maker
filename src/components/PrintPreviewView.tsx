@@ -247,9 +247,9 @@ export const PrintPreviewView: React.FC<PrintPreviewViewProps> = ({
                       <div className="absolute left-1/2 top-0 bottom-0 w-px bg-stone-300 -translate-x-1/2"></div>
 
                       {/* Left Column: Problem 1 of this page */}
-                      <div className="flex flex-col justify-between pr-4 h-full">
+                      <div className="flex flex-col justify-between pr-4 h-full min-w-0 max-w-full overflow-hidden">
                         {pageProblems[0] ? (
-                          <div className="flex flex-col flex-1 h-full">
+                          <div className="flex flex-col flex-1 h-full min-w-0 max-w-full overflow-hidden">
                             {settings.showUnitHeader && pageProblems[0].unit && (
                               <div className="text-[9.5pt] text-amber-800 font-serif-kr font-medium mb-1">
                                 [{pageProblems[0].unit}]
@@ -260,7 +260,7 @@ export const PrintPreviewView: React.FC<PrintPreviewViewProps> = ({
                                 {pageProblems[0].num}.
                               </span>
                               <div
-                                className={`font-serif-kr ${getFontSizeClass()} text-stone-900 leading-relaxed break-keep`}
+                                className={`font-serif-kr ${getFontSizeClass()} text-stone-900 leading-relaxed break-keep whitespace-pre-line`}
                               >
                                 {pageProblems[0].cleanedText || pageProblems[0].rawText}
                               </div>
@@ -269,7 +269,7 @@ export const PrintPreviewView: React.FC<PrintPreviewViewProps> = ({
                             {/* Illustration */}
                             {pageProblems[0].illustrationType !== 'none' && pageProblems[0].illustrationCode && (
                               <div
-                                className={`my-4 flex ${
+                                className={`my-3 flex w-full max-w-full overflow-hidden ${
                                   pageProblems[0].illustrationPosition === 'left'
                                     ? 'justify-start'
                                     : pageProblems[0].illustrationPosition === 'right'
@@ -294,9 +294,9 @@ export const PrintPreviewView: React.FC<PrintPreviewViewProps> = ({
                       </div>
 
                       {/* Right Column: Problem 2 of this page */}
-                      <div className="flex flex-col justify-between pl-4 h-full">
+                      <div className="flex flex-col justify-between pl-4 h-full min-w-0 max-w-full overflow-hidden">
                         {pageProblems[1] ? (
-                          <div className="flex flex-col flex-1 h-full">
+                          <div className="flex flex-col flex-1 h-full min-w-0 max-w-full overflow-hidden">
                             {settings.showUnitHeader && pageProblems[1].unit && (
                               <div className="text-[9.5pt] text-amber-800 font-serif-kr font-medium mb-1">
                                 [{pageProblems[1].unit}]
@@ -307,7 +307,7 @@ export const PrintPreviewView: React.FC<PrintPreviewViewProps> = ({
                                 {pageProblems[1].num}.
                               </span>
                               <div
-                                className={`font-serif-kr ${getFontSizeClass()} text-stone-900 leading-relaxed break-keep`}
+                                className={`font-serif-kr ${getFontSizeClass()} text-stone-900 leading-relaxed break-keep whitespace-pre-line`}
                               >
                                 {pageProblems[1].cleanedText || pageProblems[1].rawText}
                               </div>
@@ -316,7 +316,7 @@ export const PrintPreviewView: React.FC<PrintPreviewViewProps> = ({
                             {/* Illustration */}
                             {pageProblems[1].illustrationType !== 'none' && pageProblems[1].illustrationCode && (
                               <div
-                                className={`my-4 flex ${
+                                className={`my-3 flex w-full max-w-full overflow-hidden ${
                                   pageProblems[1].illustrationPosition === 'left'
                                     ? 'justify-start'
                                     : pageProblems[1].illustrationPosition === 'right'
@@ -365,7 +365,7 @@ export const PrintPreviewView: React.FC<PrintPreviewViewProps> = ({
                               {p.num}.
                             </span>
                             <div
-                              className={`font-serif-kr ${getFontSizeClass()} text-stone-900 leading-relaxed break-keep`}
+                              className={`font-serif-kr ${getFontSizeClass()} text-stone-900 leading-relaxed break-keep whitespace-pre-line`}
                             >
                               {p.cleanedText || p.rawText}
                             </div>
@@ -374,7 +374,7 @@ export const PrintPreviewView: React.FC<PrintPreviewViewProps> = ({
                           {/* Illustration */}
                           {p.illustrationType !== 'none' && p.illustrationCode && (
                             <div
-                              className={`my-3 flex ${
+                              className={`my-3 flex w-full max-w-full overflow-hidden ${
                                 p.illustrationPosition === 'left'
                                   ? 'justify-start'
                                   : p.illustrationPosition === 'right'
@@ -412,7 +412,7 @@ export const PrintPreviewView: React.FC<PrintPreviewViewProps> = ({
                               {p.num}.
                             </span>
                             <div
-                              className={`font-serif-kr ${getFontSizeClass()} text-stone-900 leading-loose break-keep`}
+                              className={`font-serif-kr ${getFontSizeClass()} text-stone-900 leading-loose break-keep whitespace-pre-line`}
                             >
                               {p.cleanedText || p.rawText}
                             </div>
@@ -421,7 +421,7 @@ export const PrintPreviewView: React.FC<PrintPreviewViewProps> = ({
                           {/* Illustration */}
                           {p.illustrationType !== 'none' && p.illustrationCode && (
                             <div
-                              className={`my-6 flex ${
+                              className={`my-6 flex w-full max-w-full overflow-hidden ${
                                 p.illustrationPosition === 'left'
                                   ? 'justify-start'
                                   : p.illustrationPosition === 'right'
