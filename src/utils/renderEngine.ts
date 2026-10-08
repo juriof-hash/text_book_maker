@@ -13,7 +13,7 @@ import { canParseWithFastEngine, parseTikz } from './tikzParser';
 
 // In-memory cache for rendered TikZ SVGs
 const svgMemoryCache = new Map<string, string>();
-const LOCAL_STORAGE_CACHE_PREFIX = 'math_sheet_tikz_svg_';
+const LOCAL_STORAGE_CACHE_PREFIX = 'math_sheet_tikz_svg_v2_';
 
 // Simple hash generator for caching
 export function getCodeHash(str: string): string {

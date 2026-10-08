@@ -156,19 +156,48 @@ export function restoreKoreanInTikZElement(
 }
 
 /**
- * Repairs degree symbols rendered as "ffi" ligature (OT1 slot 14 in cmr font) into clean degree symbols (°).
+ * Repairs degree symbols rendered as "ffi" ligature (OT1 slot 14 in cmr font, unicode 61617 / \uF0B1) into clean degree symbols (°).
  */
 export function fixDegreeSymbolsInElement(containerOrSvg: HTMLElement | SVGElement | null): void {
   if (!containerOrSvg) return;
   const textNodes = Array.from(containerOrSvg.querySelectorAll<SVGElement>('text, tspan'));
   for (const textEl of textNodes) {
     const raw = (textEl.textContent || '').trim();
-    if (raw === 'ffi' || raw === '\uFB03' || raw === '\uF00E' || raw === '&#xf00e;' || raw.includes('ffi')) {
-      textEl.textContent = raw.replace(/ffi|\uFB03|\uF00E|&#xf00e;/g, '°');
+    const isDegreeGlyph =
+      raw === 'ffi' ||
+      raw === '\uFB03' ||
+      raw === '\uF0B1' ||
+      raw === '\uF00E' ||
+      raw === '&#xf0b1;' ||
+      raw === '&#61617;' ||
+      raw.charCodeAt(0) === 61617 ||
+      raw.includes('\uF0B1') ||
+      raw.includes('ffi');
+
+    if (isDegreeGlyph) {
+      textEl.textContent = raw
+        .replace(/\uF0B1/g, '°')
+        .replace(/ffi/g, '°')
+        .replace(/\uFB03/g, '°')
+        .replace(/\uF00E/g, '°')
+        .replace(/&#xf0b1;/gi, '°')
+        .replace(/&#61617;/g, '°');
       textEl.setAttribute('font-family', "'Noto Sans KR', sans-serif");
       textEl.style.fontFamily = "'Noto Sans KR', sans-serif";
       textEl.style.fontWeight = '600';
     }
+  }
+
+  // Also check innerHTML in case entities exist in raw markup
+  if (
+    containerOrSvg.innerHTML.includes('&#xf0b1;') ||
+    containerOrSvg.innerHTML.includes('&#xF0B1;') ||
+    containerOrSvg.innerHTML.includes('&#61617;') ||
+    containerOrSvg.innerHTML.includes('\uF0B1') ||
+    containerOrSvg.innerHTML.includes('>ffi<') ||
+    containerOrSvg.innerHTML.includes('> ffi <')
+  ) {
+    containerOrSvg.innerHTML = fixDegreeSymbolsInSvgString(containerOrSvg.innerHTML);
   }
 }
 
@@ -223,16 +252,24 @@ export function fixDegreeSymbolsInSvgString(svgString: string): string {
   if (!svgString) return svgString;
   let res = svgString;
 
-  // Replace <text ...>ffi</text> or <text ...>&#xf00e;</text>
-  res = res.replace(/(<text\b[^>]*>)(?:ffi|&#xf00e;|&#xfb03;|\uFB03|\uF00E)(<\/text>)/gi, (_m, p1, p2) => {
+  // 1. Replace <text ...> or <tspan ...> containing degree/ffi entities
+  res = res.replace(/(<(?:text|tspan)\b[^>]*>)\s*(?:&#xf0b1;|&#61617;|&#xf00e;|&#xfb03;|\uF0B1|\uF00E|\uFB03|ffi)\s*(<\/(?:text|tspan)>)/gi, (_m, p1, p2) => {
     let fixedP1 = p1;
     if (/font-family="[^"]*"/i.test(fixedP1)) {
       fixedP1 = fixedP1.replace(/font-family="[^"]*"/i, 'font-family="\'Noto Sans KR\', sans-serif"');
     } else {
-      fixedP1 = fixedP1.replace(/<text\b/i, '<text font-family="\'Noto Sans KR\', sans-serif"');
+      fixedP1 = fixedP1.replace(/<(text|tspan)\b/i, '<$1 font-family="\'Noto Sans KR\', sans-serif"');
     }
     return `${fixedP1}°${p2}`;
   });
+
+  // 2. Also replace any remaining raw hex/unicode degree entities
+  res = res.replace(/&#xf0b1;/gi, '°');
+  res = res.replace(/&#61617;/g, '°');
+  res = res.replace(/\uF0B1/g, '°');
+  res = res.replace(/&#xf00e;/gi, '°');
+  res = res.replace(/&#xfb03;/gi, '°');
+  res = res.replace(/\uFB03/g, '°');
 
   return res;
 }

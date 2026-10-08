@@ -5,6 +5,8 @@ import { sanitizeTikZCode } from '../utils/illustrationRecognizer';
 import { getCachedSVG, storeCachedSVG } from '../utils/renderEngine';
 import { canParseWithFastEngine, parseTikz } from '../utils/tikzParser';
 import {
+  fixDegreeSymbolsInElement,
+  fixDegreeSymbolsInSvgString,
   prepareTikZWithKorean,
   restoreKoreanInTikZElement,
   restoreKoreanInTikZSvgString
@@ -30,6 +32,13 @@ export const IllustrationViewer: React.FC<IllustrationViewerProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [cachedHtml, setCachedHtml] = useState<string | null>(null);
   const [imageError, setImageError] = useState(false);
+
+  // Continuously fix any degree symbols rendered in the DOM
+  useEffect(() => {
+    if (containerRef.current) {
+      fixDegreeSymbolsInElement(containerRef.current);
+    }
+  }, [cachedHtml]);
 
   useEffect(() => {
     setImageError(false);
@@ -60,7 +69,7 @@ export const IllustrationViewer: React.FC<IllustrationViewerProps> = ({
       const cached = getCachedSVG(sanitized) || getCachedSVG(code);
 
       if (cached) {
-        setCachedHtml(cached);
+        setCachedHtml(fixDegreeSymbolsInSvgString(cached));
         setError(null);
         setLoading(false);
         return;
@@ -71,9 +80,10 @@ export const IllustrationViewer: React.FC<IllustrationViewerProps> = ({
         try {
           const parsed = parseTikz(sanitized);
           if (parsed.svg && !parsed.errors.length) {
-            storeCachedSVG(code, parsed.svg);
-            storeCachedSVG(sanitized, parsed.svg);
-            setCachedHtml(parsed.svg);
+            const cleanSvg = fixDegreeSymbolsInSvgString(parsed.svg);
+            storeCachedSVG(code, cleanSvg);
+            storeCachedSVG(sanitized, cleanSvg);
+            setCachedHtml(cleanSvg);
             setError(null);
             setLoading(false);
             return;
@@ -136,6 +146,7 @@ export const IllustrationViewer: React.FC<IllustrationViewerProps> = ({
             if (svg) {
               restoreKoreanInTikZElement(svg, replacements);
               let svgHtml = restoreKoreanInTikZSvgString(svg.outerHTML, replacements);
+              svgHtml = fixDegreeSymbolsInSvgString(svgHtml);
 
               storeCachedSVG(sanitized, svgHtml);
               storeCachedSVG(code, svgHtml);
@@ -157,6 +168,7 @@ export const IllustrationViewer: React.FC<IllustrationViewerProps> = ({
             if (svg) {
               restoreKoreanInTikZElement(svg, replacements);
               let svgHtml = restoreKoreanInTikZSvgString(svg.outerHTML, replacements);
+              svgHtml = fixDegreeSymbolsInSvgString(svgHtml);
               storeCachedSVG(sanitized, svgHtml);
               storeCachedSVG(code, svgHtml);
               setCachedHtml(svgHtml);
@@ -243,6 +255,7 @@ export const IllustrationViewer: React.FC<IllustrationViewerProps> = ({
 
       {cachedHtml ? (
         <div
+          ref={containerRef}
           className="tikz-svg-container w-full flex justify-center items-center"
           dangerouslySetInnerHTML={{ __html: cachedHtml }}
         />
